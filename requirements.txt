@@ -1,0 +1,8 @@
+aioboto3
+aiohttp
+boto3
+pandas
+requests
+timm
+tqdm
+pre-commit
