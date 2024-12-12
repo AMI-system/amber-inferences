@@ -274,7 +274,6 @@ def perform_inf(
 
         # catch images where no detection or all considered too large/not confident enough
         if all(skipped):
-            print(f"caught: {image_path}")
             df = pd.DataFrame(
                 [
                     [

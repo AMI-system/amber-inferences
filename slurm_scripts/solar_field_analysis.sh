@@ -1,12 +1,12 @@
 #!/bin/bash
 
-# SBATCH --job-name=process_chunks
-# SBATCH --output=./logs/solar_fields.out
-# SBATCH --time=01:00:00
-# SBATCH --ntasks=1
-# SBATCH --cpus-per-task=1
-# SBATCH --mem=4G
-# SBATCH --partition=long-serial
+#SBATCH --job-name=process_chunks
+#SBATCH --output=./logs/solar_fields.out
+#SBATCH --time=01:00:00
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=1
+#SBATCH --mem=4G
+#SBATCH --partition=long-serial
 
 source ~/miniforge3/bin/activate
 conda activate "~/conda_envs/moth_detector_env/"
@@ -51,7 +51,7 @@ except Exception as e:
     sbatch <<EOF
 #!/bin/bash
 #SBATCH --job-name=chunk_${deployment_id}_${chunk_id}
-#SBATCH --output=logs/harlequin/${deployment_id}/chunk_${deployment_id}_${chunk_id}.out
+#SBATCH --output=./logs/solar/chunk_${deployment_id}_${chunk_id}.out
 #SBATCH --time=04:00:00
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=1
@@ -69,7 +69,7 @@ python 04_process_chunks.py \
   --credentials_file "$credentials_file" \
   --csv_file "$output_base_dir/${deployment_id}.csv" \
   --localisation_model_path ./models/fasterrcnn_resnet50_fpn_tz53qv9v.pt \
-  --species_model_path "./models/turing-uk_v03_resnet50_2024-05-13-10-03_state.pt" \
+  --species_model_path ./models/turing-uk_v03_resnet50_2024-05-13-10-03_state.pt \
   --species_labels ./models/03_uk_data_category_map.json \
   --perform_inference \
   --save_crops \
