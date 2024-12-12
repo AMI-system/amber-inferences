@@ -12,26 +12,6 @@ from PIL import Image
 warnings.simplefilter(action="ignore", category=FutureWarning)
 
 
-def classify_species(image_tensor, regional_model, regional_category_map, top_n=5):
-    """
-    Classify the species of the moth using the regional model.
-    """
-
-    # print('Inference for species...')
-    output = regional_model(image_tensor)
-    predictions = torch.nn.functional.softmax(output, dim=1).cpu().detach().numpy()[0]
-
-    # Sort predictions to get the indices of the top 5 scores
-    top_n_indices = predictions.argsort()[-top_n:][::-1]
-
-    # Map indices to labels and fetch their confidence scores
-    index_to_label = {index: label for label, index in regional_category_map.items()}
-    top_n_labels = [index_to_label[idx] for idx in top_n_indices]
-    top_n_scores = [predictions[idx] for idx in top_n_indices]
-
-    return top_n_labels, top_n_scores
-
-
 def classify_order(image_tensor, order_model, order_labels, order_data_thresholds):
     """
     Classify the order of the object using the order model by Bjerge et al.
@@ -78,21 +58,17 @@ def perform_inf(
     binary_model,
     order_model,
     order_labels,
-    regional_model,
-    regional_category_map,
     proc_device,
     order_data_thresholds,
     csv_file,
     save_crops,
     box_threshold=0.995,
-    top_n=5,
 ):
     """
     Perform inferences on an image including:
       - object detection
       - object classification
       - order classification
-      - species classification
     """
 
     transform_loc = transforms.Compose(
@@ -127,11 +103,6 @@ def perform_inf(
         "order_confidence",  # order info
         "cropped_image_path",
     ]
-    all_cols = (
-        all_cols
-        + ["top_" + str(i + 1) + "_species" for i in range(top_n)]
-        + ["top_" + str(i + 1) + "_confidence" for i in range(top_n)]
-    )
 
     try:
         image = Image.open(image_path).convert("RGB")
@@ -172,20 +143,6 @@ def perform_inf(
             localisation_outputs[0]["scores"] < box_threshold
         ):
             skipped = [True]
-            # df = pd.DataFrame(
-            #     [
-            #         [image_path, bucket_name, str(datetime.now()), "NO DETECTIONS FOR IMAGE"]
-            #         + [""] * (len(all_cols) - 4),
-            #     ],
-            #     columns=all_cols,
-            # )
-
-            # df.to_csv(
-            #     f"{csv_file}",
-            #     mode="a",
-            #     header=not os.path.isfile(csv_file),
-            #     index=False,
-            # )
 
         # for each detection
         for i in range(len(localisation_outputs[0]["boxes"])):
@@ -223,19 +180,11 @@ def perform_inf(
                     cropped_tensor, order_model, order_labels, order_data_thresholds
                 )
 
-                # Annotate image with bounding box and class
-                if class_name == "moth" or "Lepidoptera" in order_name:
-                    species_names, species_confidences = classify_species(
-                        cropped_tensor, regional_model, regional_category_map, top_n
-                    )
-
-                else:
-                    species_names, species_confidences = [""] * top_n, [""] * top_n
-
                 # if save_crops then save the cropped image
                 crop_path = ""
-                if save_crops:
+                if save_crops and (order_name == 'Coleoptera' or order_name == 'Heteroptera' or order_name == 'Hemiptera'):
                     crop_path = image_path.replace(".jpg", f"_crop{i}.jpg")
+                    print(crop_path)
                     cropped_image.save(crop_path)
 
                 # append to csv with pandas
@@ -257,13 +206,9 @@ def perform_inf(
                             order_confidence,
                             crop_path,
                         ]
-                        + species_names
-                        + species_confidences
                     ],
                     columns=all_cols,
                 )
-                # if not df.empty:
-                #     all_boxes = pd.concat([all_boxes, df])
 
                 df.to_csv(
                     f"{csv_file}",

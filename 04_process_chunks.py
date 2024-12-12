@@ -52,11 +52,8 @@ def download_and_analyse(
     binary_model=None,
     order_model=None,
     order_labels=None,
-    species_model=None,
-    species_labels=None,
     device=None,
     order_data_thresholds=None,
-    top_n=5,
     csv_file="results.csv",
 ):
     """
@@ -88,12 +85,9 @@ def download_and_analyse(
                 binary_model=binary_model,
                 order_model=order_model,
                 order_labels=order_labels,
-                regional_model=species_model,
-                regional_category_map=species_labels,
                 proc_device=device,
                 order_data_thresholds=order_data_thresholds,
                 csv_file=csv_file,
-                top_n=top_n,
                 save_crops=save_crops,
             )
         # Remove the image if cleanup is enabled
@@ -115,11 +109,8 @@ def main(
     binary_model=None,
     order_model=None,
     order_labels=None,
-    species_model=None,
-    species_labels=None,
     device=None,
     order_data_thresholds=None,
-    top_n=5,
     csv_file="results.csv",
 ):
     """
@@ -154,11 +145,8 @@ def main(
         binary_model=binary_model,
         order_model=order_model,
         order_labels=order_labels,
-        species_model=species_model,
-        species_labels=species_labels,
         device=device,
         order_data_thresholds=order_data_thresholds,
-        top_n=top_n,
         csv_file=csv_file,
     )
 
@@ -222,18 +210,6 @@ if __name__ == "__main__":
         "--order_labels", type=str, help="Path to the order labels file."
     )
     parser.add_argument(
-        "--species_model_path",
-        type=str,
-        help="Path to the species model weights.",
-        default="./models/turing-costarica_v03_resnet50_2024-06-04-16-17_state.pt",
-    )
-    parser.add_argument(
-        "--species_labels",
-        type=str,
-        help="Path to the species labels file.",
-        default="./models/03_costarica_data_category_map.json",
-    )
-    parser.add_argument(
         "--device",
         type=str,
         default="cpu",
@@ -244,12 +220,6 @@ if __name__ == "__main__":
         type=str,
         help="Path to the order data thresholds file.",
         default="./models/thresholdsTestTrain.csv",
-    )
-    parser.add_argument(
-        "--top_n_species",
-        type=int,
-        help="The number of predictions to output.",
-        default=5,
     )
     parser.add_argument(
         "--csv_file", default="results.csv", help="Path to save analysis results."
@@ -276,8 +246,6 @@ if __name__ == "__main__":
         args.binary_model_path,
         args.order_model_path,
         args.order_thresholds_path,
-        args.species_model_path,
-        args.species_labels,
     )
 
     main(
@@ -295,9 +263,6 @@ if __name__ == "__main__":
         order_model=models["order_model"],
         order_labels=models["order_model_labels"],
         order_data_thresholds=models["order_model_thresholds"],
-        species_model=models["species_model"],
-        species_labels=models["species_model_labels"],
         device=device,
-        top_n=args.top_n_species,
         csv_file=args.csv_file,
     )
