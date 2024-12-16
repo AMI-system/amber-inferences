@@ -12,7 +12,7 @@ source ~/miniforge3/bin/activate
 conda activate "~/conda_envs/moth_detector_env/"
 
 json_directory="./keys/harlequin"
-output_base_dir="./data/harlequin/"
+output_base_dir="./data/harlequin_old_loc_model/"
 credentials_file="./credentials.json"
 
 

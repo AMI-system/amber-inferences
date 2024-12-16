@@ -111,16 +111,13 @@ def perform_inf(
         df = pd.DataFrame(
             [
                 [image_path, bucket_name, str(datetime.now()), "IMAGE CORRUPT"]
-                + [""] * (len(all_cols) - 4),
+                + [""] * (len(all_cols) - 4)
             ],
             columns=all_cols,
         )
 
         df.to_csv(
-            f"{csv_file}",
-            mode="a",
-            header=not os.path.isfile(csv_file),
-            index=False,
+            f"{csv_file}", mode="a", header=not os.path.isfile(csv_file), index=False
         )
         return  # Skip this image
 
@@ -182,7 +179,11 @@ def perform_inf(
 
                 # if save_crops then save the cropped image
                 crop_path = ""
-                if save_crops and (order_name == 'Coleoptera' or order_name == 'Heteroptera' or order_name == 'Hemiptera'):
+                if save_crops and (
+                    order_name == "Coleoptera"
+                    or order_name == "Heteroptera"
+                    or order_name == "Hemiptera"
+                ):
                     crop_path = image_path.replace(".jpg", f"_crop{i}.jpg")
                     print(crop_path)
                     cropped_image.save(crop_path)
@@ -228,7 +229,7 @@ def perform_inf(
                         str(datetime.now()),
                         "NO DETECTIONS FOR IMAGE",
                     ]
-                    + [""] * (len(all_cols) - 4),
+                    + [""] * (len(all_cols) - 4)
                 ],
                 columns=all_cols,
             )
