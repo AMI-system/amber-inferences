@@ -12,8 +12,7 @@ source ~/miniforge3/bin/activate
 conda activate "~/conda_envs/moth_detector_env/"
 
 json_directory="./keys/harlequin"
-region="pan"
-output_base_dir="./data/harlequin/${region}"
+output_base_dir="./data/harlequin/"
 credentials_file="./credentials.json"
 
 
@@ -21,22 +20,27 @@ credentials_file="./credentials.json"
 cri_deps=('dep000034' 'dep000032' 'dep000038' 'dep000037' 'dep000033')
 pan_deps=('dep000017' 'dep000018' 'dep000020' 'dep000021' 'dep000022' 'dep000083' 'dep000084' 'dep000086' 'dep000087' 'dep000088' 'dep000089' 'dep000090' 'dep000091' 'dep000092')
 
-for dep in "${cri_deps[@]}"; do
-    echo $dep
-    python 02_generate_keys.py --bucket 'cri' --deployment_id $dep --output_file '${json_directory}/${dep}_keys.txt'
-    python 03_pre_chop_files.py --input_file '${json_directory}/${dep}_keys.txt' --file_extensions 'jpg' 'jpeg' --chunk_size 100 --output_file '${json_directory}/${dep}_workload_chunks.json'
-done
+# for dep in "${cri_deps[@]}"; do
+#     echo $dep
+#     region="cri"
 
-for dep in "${pan_deps[@]}"; do
-    echo $dep
-    python 02_generate_keys.py --bucket 'pan' --deployment_id $dep --output_file '${json_directory}/${dep}_keys.txt'
-    python 03_pre_chop_files.py --input_file '${json_directory}/${dep}_keys.txt' --file_extensions 'jpg' 'jpeg' --chunk_size 100 --output_file '${json_directory}/${dep}_workload_chunks.json'
-done
+#     python 02_generate_keys.py --bucket $region --deployment_id $dep --output_file "${json_directory}/${region}/${dep}_keys.txt"
+#     python 03_pre_chop_files.py --input_file "${json_directory}/${region}/${dep}_keys.txt" --file_extensions "jpg" "jpeg" --chunk_size 100 --output_file "${json_directory}/${region}/${dep}_workload_chunks.json"
+# done
+
+# for dep in "${pan_deps[@]}"; do
+#     echo $dep
+#     region="pan"
+
+#     python 02_generate_keys.py --bucket $region --deployment_id $dep --output_file "${json_directory}/${region}/${dep}_keys.txt"
+#     python 03_pre_chop_files.py --input_file "${json_directory}/${region}/${dep}_keys.txt" --file_extensions "jpg" "jpeg" --chunk_size 100 --output_file "${json_directory}/${region}/${dep}_workload_chunks.json"
+# done
 
 
 
 # Perform the inferences
-for json_file in ${json_directory}/*_workload_chunks.json; do
+for json_file in ${json_directory}/*/*_workload_chunks.json; do
+
   if [[ ! -f "$json_file" ]]; then
     echo "No matching files found in ${json_directory}/"
     continue
@@ -44,8 +48,11 @@ for json_file in ${json_directory}/*_workload_chunks.json; do
 
   echo "Processing file: $json_file"
 
+  region=$(basename "$(dirname -- "$json_file")")
+  echo $region
+
   deployment_id=$(basename "$json_file" | sed 's/_workload_chunks.json//')
-  echo "Deployment ID: $deployment_id"
+  echo "Region: $region, Deployment ID: $deployment_id"
 
   num_chunks=$(python3 -c "
 import json
@@ -71,7 +78,7 @@ except Exception as e:
     sbatch <<EOF
 #!/bin/bash
 #SBATCH --job-name=chunk_${deployment_id}_${chunk_id}
-#SBATCH --output=logs/harlequin/${deployment_id}/chunk_${deployment_id}_${chunk_id}.out
+#SBATCH --output=logs/harlequin/${region}/${deployment_id}/chunk_${deployment_id}_${chunk_id}.out
 #SBATCH --time=04:00:00
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=1
@@ -80,6 +87,8 @@ except Exception as e:
 
 source ~/miniforge3/bin/activate
 conda activate "~/conda_envs/moth_detector_env/"
+
+echo $region
 
 python 04_process_chunks.py \
   --chunk_id $chunk_id \

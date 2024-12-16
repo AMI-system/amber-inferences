@@ -101,19 +101,19 @@ or for the UK only:
 
 ```bash
 python 01_print_deployments.py \
-  --subset_countries 'United Kingdom'
+  --subset_countries 'Costa Rica' 'Panama'
 ```
 
 ### 02. Generating the Keys
 
 ```bash
-python 02_generate_keys.py --bucket 'gbr' --deployment_id 'dep000072' --output_file './keys/solar/dep000072_keys.txt'
+python 02_generate_keys.py --bucket 'cri' --deployment_id 'dep000034' --output_file './keys/harlequin/dep000034_keys.txt'
 ```
 
 ### 03. Pre-chop the Keys into Chunks
 
 ```bash
-python 03_pre_chop_files.py --input_file './keys/solar/dep000072_keys.txt' --file_extensions 'jpg' 'jpeg' --chunk_size 100 --output_file './keys/solar/dep000072_workload_chunks.json'
+python 03_pre_chop_files.py --input_file './keys/harlequin/dep000034_keys.txt' --file_extensions 'jpg' 'jpeg' --chunk_size 100 --output_file './keys/harlequin/dep000034_workload_chunks.json'
 ```
 
 ### 04. Process the Chunked Files
@@ -123,14 +123,12 @@ For a single chunk:
 ```bash
 python 04_process_chunks.py \
   --chunk_id 1 \
-  --json_file './keys/solar/dep000072_workload_chunks.json' \
-  --output_dir './data/solar/dep000072' \
+  --json_file './keys/harlequin/dep000034_workload_chunks.json' \
+  --output_dir './data/harlequin/dep000034' \
   --bucket_name 'gbr' \
   --credentials_file './credentials.json' \
   --csv_file 'dep000072.csv' \
   --localisation_model_path ./models/fasterrcnn_resnet50_fpn_tz53qv9v.pt \
-  --species_model_path ./models/turing-uk_v03_resnet50_2024-05-13-10-03_state.pt \
-  --species_labels ./models/03_uk_data_category_map.json \
   --perform_inference \
   --remove_image \
   --save_crops
@@ -140,10 +138,10 @@ python 04_process_chunks.py \
 
 To run with slurm you need to be logged in on the [scientific nodes](https://help.jasmin.ac.uk/docs/interactive-computing/sci-servers/).
 
-It is recommended you set up a shell script to runfor your country and deployment of interest. For example, `solar_field_analysis.sh` peformes inferences for the UK's Solar 1 panels deployment. You can run this using:
+It is recommended you set up a shell script to runfor your country and deployment of interest. For example, `harlequin.sh` peformes inferences for the UK's Solar 1 panels deployment. You can run this using:
 
 ```bash
-sbatch solar_field_analysis.sh
+sbatch ./slurm_scripts/harlequin.sh
 ```
 
 Note to run slurm you will need to install miniforge on the scientific nodes.
