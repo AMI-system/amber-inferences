@@ -1,7 +1,7 @@
 #!/bin/bash
 
 #SBATCH --job-name=process_chunks
-#SBATCH --output=./logs/harlequin.out
+#SBATCH --output=./logs/harlequin_old_loc.out
 #SBATCH --time=01:00:00
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=1
@@ -39,7 +39,7 @@ pan_deps=('dep000017' 'dep000018' 'dep000020' 'dep000021' 'dep000022' 'dep000083
 
 
 # Perform the inferences
-for json_file in ${json_directory}/*/*_workload_chunks.json; do
+for json_file in ${json_directory}/*/dep00002*_workload_chunks.json; do
 
   if [[ ! -f "$json_file" ]]; then
     echo "No matching files found in ${json_directory}/"
@@ -78,7 +78,7 @@ except Exception as e:
     sbatch <<EOF
 #!/bin/bash
 #SBATCH --job-name=chunk_${deployment_id}_${chunk_id}
-#SBATCH --output=logs/harlequin/${region}/${deployment_id}/chunk_${deployment_id}_${chunk_id}.out
+#SBATCH --output=logs/harlequin_old_loc/${region}/${deployment_id}/chunk_${deployment_id}_${chunk_id}.out
 #SBATCH --time=04:00:00
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=1
