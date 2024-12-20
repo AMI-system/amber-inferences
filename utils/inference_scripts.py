@@ -62,7 +62,7 @@ def perform_inf(
     order_data_thresholds,
     csv_file,
     save_crops,
-    box_threshold=0.995,
+    box_threshold=0.8,
 ):
     """
     Perform inferences on an image including:

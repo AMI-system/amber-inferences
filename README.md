@@ -144,7 +144,9 @@ It is recommended you set up a shell script to runfor your country and deploymen
 sbatch ./slurm_scripts/harlequin.sh
 ```
 
-Note to run slurm you will need to install miniforge on the scientific nodes.
+Notes
+1. to run slurm you will need to install miniforge on the scientific nodes.
+2. When running python from slurm scripts, use the `python -u` argument. This is important for logging as python then prints to stdout unbuffered
 
 To check the slurm queue:
 

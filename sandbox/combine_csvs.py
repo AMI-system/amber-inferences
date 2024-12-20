@@ -40,15 +40,13 @@ def combine_csvs_from_subdirectories(root_directory):
     return combined_df
 
 
-# Example usage
 if __name__ == "__main__":
-    root_dir = "/home/users/katriona/amber-inferences/data/harlequin/"  # Replace with your root directory path
+    root_dir = "/home/users/katriona/amber-inferences/data/harlequin_new_loc_model/"
     combined_dataframe = combine_csvs_from_subdirectories(root_dir)
-    # print(combined_dataframe.head())  # Display the first few rows of the combined DataFrame
     print("complete")
 
     # Optional: Save the combined DataFrame to a new CSV
     combined_dataframe.to_csv(
-        "/home/users/katriona/amber-inferences/data/harlequin/combined_data.csv",
+        "/home/users/katriona/amber-inferences/data/harlequin_new_loc_model/combined_data.csv",
         index=False,
     )

@@ -92,6 +92,7 @@ def download_and_analyse(
             )
         # Remove the image if cleanup is enabled
         if remove_image:
+            print("Removing image")
             os.remove(local_path)
 
 
@@ -239,6 +240,11 @@ if __name__ == "__main__":
             "\033[95m\033[1mCuda not available, using CPU "
             + "\N{Cross Mark}\033[0m\033[0m"
         )
+
+    if args.remove_image:
+        print("\033[95m\033[1mRemoving raw images. \033[0m\033[0m")
+    else:
+        print("\033[95m\033[1mKeeping raw images. \033[0m\033[0m")
 
     models = load_models(
         device,
