@@ -96,7 +96,7 @@ python -u 04_process_chunks.py \
   --output_dir "$output_base_dir/$deployment_id" \
   --bucket_name "$region" \
   --credentials_file "$credentials_file" \
-  --csv_file "$output_base_dir/${deployment_id}.csv" \
+  --csv_file "$output_base_dir/${deployment_id}_${chunk_id}.csv" \
   --localisation_model_path ./models/fasterrcnn_resnet50_fpn_tz53qv9v.pt \
   --perform_inference \
   --remove_image \
