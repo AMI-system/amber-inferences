@@ -67,7 +67,7 @@ python 04_process_chunks.py \
   --output_dir "$output_base_dir/$deployment_id" \
   --bucket_name "$region" \
   --credentials_file "$credentials_file" \
-  --csv_file "$output_base_dir/${deployment_id}.csv" \
+  --csv_file "$output_base_dir/${deployment_id}_${chunk_id}.csv" \
   --localisation_model_path ./models/fasterrcnn_resnet50_fpn_tz53qv9v.pt \
   --box_threshold 0.8 \
   --species_model_path ./models/turing-uk_v03_resnet50_2024-05-13-10-03_state.pt \
@@ -85,3 +85,9 @@ EOF
 done
 
 echo "All chunk jobs submitted successfully."
+
+echo "Combining outputs into one csv"
+python 05_combine_outputs.py \
+  --csv_file_pattern "$output_base_dir/${deployment_id}_*.csv" \
+  --main_csv_file "$output_base_dir/${deployment_id}.csv" #\
+  --remove_chunk_files
