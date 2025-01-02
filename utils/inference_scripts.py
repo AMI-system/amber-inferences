@@ -172,20 +172,6 @@ def perform_inf(
             localisation_outputs[0]["scores"] < box_threshold
         ):
             skipped = [True]
-            # df = pd.DataFrame(
-            #     [
-            #         [image_path, bucket_name, str(datetime.now()), "NO DETECTIONS FOR IMAGE"]
-            #         + [""] * (len(all_cols) - 4),
-            #     ],
-            #     columns=all_cols,
-            # )
-
-            # df.to_csv(
-            #     f"{csv_file}",
-            #     mode="a",
-            #     header=not os.path.isfile(csv_file),
-            #     index=False,
-            # )
 
         # for each detection
         for i in range(len(localisation_outputs[0]["boxes"])):
