@@ -145,6 +145,17 @@ python 04_process_chunks.py \
   --save_crops
 ```
 
+### 05. Combine Chunk Outputs (Optional)
+
+If running using slurm, we typically write each chunk to an individual csv so ensure the do not overwrite one another. To combine into one file, run:
+
+```bash
+python 05_combine_outputs.py \
+  --csv_file_pattern "./data/solar/dep000072/dep000072_*.csv" \
+  --main_csv_file "./data/solar/dep000072/dep000072.csv" \
+  --remove_chunk_files
+```
+
 ## Running with slurm
 
 To run with slurm you need to be logged in on the [scientific nodes](https://help.jasmin.ac.uk/docs/interactive-computing/sci-servers/).
