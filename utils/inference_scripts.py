@@ -115,6 +115,7 @@ def perform_inf(
         "image_path",
         "bucket_name",
         "analysis_datetime",
+        "crop_status",
         "box_score",
         "box_label",
         "x_min",
@@ -175,6 +176,7 @@ def perform_inf(
 
         # for each detection
         for i in range(len(localisation_outputs[0]["boxes"])):
+            crop_status = "crop " + str(i)
             x_min, y_min, x_max, y_max = localisation_outputs[0]["boxes"][i]
             box_score = localisation_outputs[0]["scores"].tolist()[i]
             box_label = localisation_outputs[0]["labels"].tolist()[i]
@@ -231,6 +233,7 @@ def perform_inf(
                             image_path,
                             bucket_name,
                             str(datetime.now()),
+                            crop_status,
                             box_score,
                             box_label,
                             x_min,
@@ -248,8 +251,6 @@ def perform_inf(
                     ],
                     columns=all_cols,
                 )
-                # if not df.empty:
-                #     all_boxes = pd.concat([all_boxes, df])
 
                 df.to_csv(
                     f"{csv_file}",
