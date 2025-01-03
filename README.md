@@ -151,8 +151,8 @@ If running using slurm, we typically write each chunk to an individual csv so en
 
 ```bash
 python 05_combine_outputs.py \
-  --csv_file_pattern "./data/solar/dep000072/dep000072_*.csv" \
-  --main_csv_file "./data/solar/dep000072/dep000072.csv" \
+  --csv_file_pattern "./data/solar/gbr/dep000072_*.csv" \
+  --main_csv_file "./data/solar/gbr/dep000072.csv" \
   --remove_chunk_files
 ```
 

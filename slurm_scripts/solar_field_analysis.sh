@@ -51,7 +51,7 @@ except Exception as e:
     sbatch <<EOF
 #!/bin/bash
 #SBATCH --job-name=chunk_${deployment_id}_${chunk_id}
-#SBATCH --output=./logs/solar/chunk_${deployment_id}_${chunk_id}.out
+#SBATCH --output=./logs/solar/${deployment_id}_chunk_${chunk_id}.out
 #SBATCH --time=04:00:00
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=1
@@ -89,5 +89,5 @@ echo "All chunk jobs submitted successfully."
 echo "Combining outputs into one csv"
 python 05_combine_outputs.py \
   --csv_file_pattern "$output_base_dir/${deployment_id}_*.csv" \
-  --main_csv_file "$output_base_dir/${deployment_id}.csv" #\
+  --main_csv_file "$output_base_dir/${deployment_id}.csv" \
   --remove_chunk_files

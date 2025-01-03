@@ -10,6 +10,7 @@ def main(
     main_csv_file="results.csv",
     append=True,
     remove_chunk_files=True,
+    remove_empty_rows=True,
 ):
     """
     Main function to combine outputs from multiple chunks.
@@ -19,6 +20,7 @@ def main(
         main_csv_file (str): Path to the main results file.
         append (bool): Whether to append to existing results file or not.
         remove_chunk_files (bool): Whether to remove the chunk outputs once combined.
+        remove_empty_rows (bool): Keep only rows for crops (drops rows for empty and corrupt images).
     """
 
     print(csv_file_pattern)
@@ -38,6 +40,12 @@ def main(
     else:
         write_mode = "w"
         write_header = True
+
+    if remove_empty_rows:
+        glued_data = glued_data.loc[glued_data["score_status"] != "IMAGE CORRUPT",]
+        glued_data = glued_data.loc[
+            glued_data["score_status"] != "NO DETECTIONS FOR IMAGE",
+        ]
 
     print(f"Writting to {main_csv_file}")
     glued_data.to_csv(
@@ -71,6 +79,11 @@ if __name__ == "__main__":
         action="store_true",
         help="Whether to remove the existing chunk outputs.",
     )
+    parser.add_argument(
+        "--remove_empty_rows",
+        action="store_true",
+        help="Keep only rows for crops (drops rows for empty and corrupt images).",
+    )
 
     args = parser.parse_args()
 
@@ -79,4 +92,5 @@ if __name__ == "__main__":
         main_csv_file=args.main_csv_file,
         append=args.append,
         remove_chunk_files=args.remove_chunk_files,
+        remove_empty_rows=args.remove_empty_rows,
     )
