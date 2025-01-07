@@ -39,7 +39,7 @@ pan_deps=('dep000020' 'dep000021' 'dep000022' 'dep000083' 'dep000084' 'dep000086
 
 
 # Perform the inferences
-for json_file in ${json_directory}/*/dep00008*_workload_chunks.json; do
+for json_file in ${json_directory}/*/dep000022_workload_chunks.json; do
 
   if [[ ! -f "$json_file" ]]; then
     echo "No matching files found in ${json_directory}/"
@@ -78,7 +78,7 @@ except Exception as e:
     sbatch <<EOF
 #!/bin/bash
 #SBATCH --job-name=chunk_${deployment_id}_${chunk_id}
-#SBATCH --output=logs/harlequin_new_loc/${region}/${deployment_id}/chunk_${deployment_id}_${chunk_id}.out
+#SBATCH --output=logs/harlequin_new_loc/${region}/${deployment_id}/${deployment_id}_chunk_${chunk_id}.out
 #SBATCH --time=04:00:00
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=1
@@ -98,6 +98,7 @@ python -u 04_process_chunks.py \
   --credentials_file "$credentials_file" \
   --csv_file "$output_base_dir/${deployment_id}_${chunk_id}.csv" \
   --localisation_model_path ./models/fasterrcnn_resnet50_fpn_tz53qv9v.pt \
+  --box_threshold 0.8 \
   --perform_inference \
   --remove_image \
   --save_crops
@@ -111,3 +112,8 @@ EOF
 done
 
 echo "All chunk jobs submitted successfully."
+
+# echo "Combining outputs into one csv"
+# python 05_combine_outputs.py \
+#   --csv_file_pattern "$output_base_dir/dep*_*.csv" \
+#   --main_csv_file "$output_base_dir/main_outputs.csv"
