@@ -113,6 +113,7 @@ def perform_inf(
 
     all_cols = [
         "image_path",
+        "image_datetime",
         "bucket_name",
         "analysis_datetime",
         "crop_status",
@@ -134,14 +135,23 @@ def perform_inf(
         + ["top_" + str(i + 1) + "_confidence" for i in range(top_n)]
     )
 
+    # extract the datetime from the image path
+    image_dt = os.path.basename(image_path).split("-")[0]
+    image_dt = datetime.strptime(image_dt, "%Y%m%d%H%M%S%f")
+    image_dt = datetime.strftime(image_dt, "%Y-%m-%d %H:%M:%S")
+
+    current_dt = datetime.now()
+    current_dt = datetime.strftime(current_dt, "%Y-%m-%d %H:%M:%S")
+
     try:
         image = Image.open(image_path).convert("RGB")
     except Exception as e:
         print(f"Error opening image {image_path}: {e}")
+
         df = pd.DataFrame(
             [
-                [image_path, bucket_name, str(datetime.now()), "IMAGE CORRUPT"]
-                + [""] * (len(all_cols) - 4),
+                [image_path, image_dt, bucket_name, current_dt, "IMAGE CORRUPT"]
+                + [""] * (len(all_cols) - 5),
             ],
             columns=all_cols,
         )
@@ -231,8 +241,9 @@ def perform_inf(
                     [
                         [
                             image_path,
+                            image_dt,
                             bucket_name,
-                            str(datetime.now()),
+                            current_dt,
                             crop_status,
                             box_score,
                             box_label,
@@ -265,15 +276,15 @@ def perform_inf(
                 [
                     [
                         image_path,
+                        image_dt,
                         bucket_name,
-                        str(datetime.now()),
+                        current_dt,
                         "NO DETECTIONS FOR IMAGE",
                     ]
-                    + [""] * (len(all_cols) - 4),
+                    + [""] * (len(all_cols) - 5),
                 ],
                 columns=all_cols,
             )
-
             df.to_csv(
                 f"{csv_file}",
                 mode="a",
