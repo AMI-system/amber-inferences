@@ -48,7 +48,6 @@ def download_and_analyse(
     perform_inference=True,
     save_crops=False,
     flatbug_model=None,
-    localisation_model=None,
     box_threshold=0.99,
     binary_model=None,
     order_model=None,
@@ -85,7 +84,6 @@ def download_and_analyse(
                 local_path,
                 bucket_name=bucket_name,
                 flatbug_model=flatbug_model,
-                loc_model=localisation_model,
                 box_threshold=box_threshold,
                 binary_model=binary_model,
                 order_model=order_model,
@@ -113,7 +111,6 @@ def main(
     perform_inference=True,
     save_crops=False,
     flatbug_model=None,
-    localisation_model=None,
     box_threshold=0.99,
     binary_model=None,
     order_model=None,
@@ -153,7 +150,6 @@ def main(
         perform_inference=perform_inference,
         save_crops=save_crops,
         flatbug_model=flatbug_model,
-        localisation_model=localisation_model,
         box_threshold=box_threshold,
         binary_model=binary_model,
         order_model=order_model,
@@ -203,12 +199,6 @@ if __name__ == "__main__":
         type=str,
         help="Path to the flatbug model weights.",
         default="./models/flat_bug_M.pt",
-    )
-    parser.add_argument(
-        "--localisation_model_path",
-        type=str,
-        help="Path to the localisation model weights.",
-        default="./models/v1_localizmodel_2021-08-17-12-06.pt",
     )
     parser.add_argument(
         "--box_threshold",
@@ -283,7 +273,6 @@ if __name__ == "__main__":
     models = load_models(
         device,
         args.flatbug_model_path,
-        args.localisation_model_path,
         args.binary_model_path,
         args.order_model_path,
         args.order_thresholds_path,
@@ -301,7 +290,6 @@ if __name__ == "__main__":
         save_crops=args.save_crops,
         perform_inference=args.perform_inference,
         flatbug_model=models["flatbug_model"],
-        localisation_model=models["localisation_model"],
         box_threshold=args.box_threshold,
         binary_model=models["classification_model"],
         order_model=models["order_model"],
