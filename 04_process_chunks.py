@@ -47,6 +47,7 @@ def download_and_analyse(
     remove_image=True,
     perform_inference=True,
     save_crops=False,
+    flatbug_model=None,
     localisation_model=None,
     box_threshold=0.99,
     binary_model=None,
@@ -83,6 +84,7 @@ def download_and_analyse(
             perform_inf(
                 local_path,
                 bucket_name=bucket_name,
+                flatbug_model=flatbug_model,
                 loc_model=localisation_model,
                 box_threshold=box_threshold,
                 binary_model=binary_model,
@@ -110,6 +112,7 @@ def main(
     remove_image=True,
     perform_inference=True,
     save_crops=False,
+    flatbug_model=None,
     localisation_model=None,
     box_threshold=0.99,
     binary_model=None,
@@ -149,6 +152,7 @@ def main(
         remove_image=remove_image,
         perform_inference=perform_inference,
         save_crops=save_crops,
+        flatbug_model=flatbug_model,
         localisation_model=localisation_model,
         box_threshold=box_threshold,
         binary_model=binary_model,
@@ -193,6 +197,12 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--save_crops", action="store_true", help="Whether to save the crops."
+    )
+    parser.add_argument(
+        "--flatbug_model_path",
+        type=str,
+        help="Path to the flatbug model weights.",
+        default="./models/flat_bug_M.pt",
     )
     parser.add_argument(
         "--localisation_model_path",
@@ -258,7 +268,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     if torch.cuda.is_available():
-        device = torch.device("cuda")
+        device = torch.device("cuda:0")
         print(
             "\033[95m\033[1mCuda available, using GPU "
             + "\N{White Heavy Check Mark}\033[0m\033[0m"
@@ -272,6 +282,7 @@ if __name__ == "__main__":
 
     models = load_models(
         device,
+        args.flatbug_model_path,
         args.localisation_model_path,
         args.binary_model_path,
         args.order_model_path,
@@ -289,6 +300,7 @@ if __name__ == "__main__":
         remove_image=args.remove_image,
         save_crops=args.save_crops,
         perform_inference=args.perform_inference,
+        flatbug_model=models["flatbug_model"],
         localisation_model=models["localisation_model"],
         box_threshold=args.box_threshold,
         binary_model=models["classification_model"],
