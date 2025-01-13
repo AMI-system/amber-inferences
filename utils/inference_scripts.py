@@ -3,25 +3,17 @@ import warnings
 from datetime import datetime
 
 import numpy as np
+import pandas as pd
 import torch
-
-# import pandas as pd
-# import torchvision.transforms as transforms
-# from flat_bug.predictor import Predictor
-# from PIL import Image
+import torchvision.transforms as transforms
+from PIL import Image
 
 # ignore the pandas Future Warning
 warnings.simplefilter(action="ignore", category=FutureWarning)
 
 
 def flatbug(image_path, flatbug_model):
-    print("Running flatbug")
-
-    # Run inference on an image
     output = flatbug_model(image_path)
-
-    print(len(output.json_data["boxes"]))
-    # print(len(output.json_data.items().boxes))
 
     # Save a visualization of the predictions
     if len(output.json_data["boxes"]) > 0:
@@ -30,7 +22,12 @@ def flatbug(image_path, flatbug_model):
             outpath=f"{os.path.dirname(image_path)}/flatbug/flatbug_{os.path.basename(image_path)}"
         )
 
-    return output.json_data
+    # rename the confs item as scores
+    crop_info = output.json_data
+    crop_info["scores"] = crop_info.pop("confs")
+    crop_info["labels"] = crop_info.pop("classes")
+
+    return crop_info
 
 
 def classify_species(image_tensor, regional_model, regional_category_map, top_n=5):
@@ -96,7 +93,6 @@ def perform_inf(
     image_path,
     bucket_name,
     flatbug_model,
-    loc_model,
     binary_model,
     order_model,
     order_labels,
@@ -112,26 +108,17 @@ def perform_inf(
     """
     Perform inferences on an image including:
       - object detection
-      - object classification
       - order classification
       - species classification
     """
 
-    # transform_loc = transforms.Compose(
-    #     [
-    #         transforms.Resize((300, 300)),
-    #         transforms.ToTensor(),
-    #         transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-    #     ]
-    # )
-
-    # transform_species = transforms.Compose(
-    #     [
-    #         transforms.Resize((300, 300)),
-    #         transforms.ToTensor(),
-    #         transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5]),
-    #     ]
-    # )
+    transform_species = transforms.Compose(
+        [
+            transforms.Resize((300, 300)),
+            transforms.ToTensor(),
+            transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5]),
+        ]
+    )
 
     all_cols = [
         "image_path",
@@ -167,4 +154,138 @@ def perform_inf(
 
     if not os.path.exists(f"{os.path.dirname(image_path)}/flatbug/"):
         os.makedirs(f"{os.path.dirname(image_path)}/flatbug/")
-    flatbug(image_path, flatbug_model)
+
+    try:
+        image = Image.open(image_path).convert("RGB")
+    except Exception as e:
+        print(f"Error opening image {image_path}: {e}")
+
+        df = pd.DataFrame(
+            [
+                [image_path, image_dt, bucket_name, current_dt, "IMAGE CORRUPT"]
+                + [""] * (len(all_cols) - 5),
+            ],
+            columns=all_cols,
+        )
+
+        df.to_csv(
+            f"{csv_file}",
+            mode="a",
+            header=not os.path.isfile(csv_file),
+            index=False,
+        )
+        return  # Skip this image
+
+    # # print('Inference for flatbug...')
+    flatbug_outputs = flatbug(image_path, flatbug_model)
+
+    original_image = image.copy()
+    original_width, original_height = image.size
+
+    skipped = []
+
+    print(flatbug_outputs["scores"])
+
+    # catch no crops: if no boxes or all boxes below threshold
+    if len(flatbug_outputs["boxes"]) == 0 or all(
+        [score < box_threshold for score in flatbug_outputs["scores"]]
+    ):
+        skipped = [True]
+
+    # for each detection
+    for i in range(len(flatbug_outputs["boxes"])):
+        crop_status = "crop " + str(i)
+        print(crop_status)
+        x_min, y_min, x_max, y_max = flatbug_outputs["boxes"][i]
+        box_score = flatbug_outputs["scores"][i]
+        box_label = flatbug_outputs["labels"][i]
+
+        x_min = int(int(x_min) * original_width / 300)
+        y_min = int(int(y_min) * original_height / 300)
+        x_max = int(int(x_max) * original_width / 300)
+        y_max = int(int(y_max) * original_height / 300)
+
+        if box_score < box_threshold:
+            continue
+
+            # Crop the detected region and perform classification
+            cropped_image = original_image.crop((x_min, y_min, x_max, y_max))
+            cropped_tensor = (
+                transform_species(cropped_image).unsqueeze(0).to(proc_device)
+            )
+
+            class_name, class_confidence = classify_box(cropped_tensor, binary_model)
+            order_name, order_confidence = classify_order(
+                cropped_tensor, order_model, order_labels, order_data_thresholds
+            )
+
+            # Annotate image with bounding box and class
+            if class_name == "moth" or "Lepidoptera" in order_name:
+                species_names, species_confidences = classify_species(
+                    cropped_tensor, regional_model, regional_category_map, top_n
+                )
+
+            else:
+                species_names, species_confidences = [""] * top_n, [""] * top_n
+
+            # if save_crops then save the cropped image
+            crop_path = ""
+            if save_crops:
+                crop_path = image_path.replace(".jpg", f"_crop{i}.jpg")
+                cropped_image.save(crop_path)
+
+            # append to csv with pandas
+            df = pd.DataFrame(
+                [
+                    [
+                        image_path,
+                        image_dt,
+                        bucket_name,
+                        current_dt,
+                        crop_status,
+                        box_score,
+                        box_label,
+                        x_min,
+                        y_min,
+                        x_max,
+                        y_max,
+                        class_name,
+                        class_confidence,
+                        order_name,
+                        order_confidence,
+                        crop_path,
+                    ]
+                    + species_names
+                    + species_confidences
+                ],
+                columns=all_cols,
+            )
+
+            df.to_csv(
+                f"{csv_file}",
+                mode="a",
+                header=not os.path.isfile(csv_file),
+                index=False,
+            )
+
+    # catch images where no detection or all considered too large/not confident enough
+    if all(skipped):
+        df = pd.DataFrame(
+            [
+                [
+                    image_path,
+                    image_dt,
+                    bucket_name,
+                    current_dt,
+                    "NO DETECTIONS FOR IMAGE",
+                ]
+                + [""] * (len(all_cols) - 5),
+            ],
+            columns=all_cols,
+        )
+        df.to_csv(
+            f"{csv_file}",
+            mode="a",
+            header=not os.path.isfile(csv_file),
+            index=False,
+        )
