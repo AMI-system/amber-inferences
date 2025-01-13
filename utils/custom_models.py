@@ -7,6 +7,7 @@ import timm
 import torch
 import torch.nn as nn
 import torchvision
+from flat_bug.predictor import Predictor
 from torchvision import models
 from torchvision.models import ResNet50_Weights
 
@@ -75,6 +76,7 @@ class ResNet50_order(nn.Module):
 
 def load_models(
     device,
+    flatbug_model_path,
     localisation_model_path,
     binary_model_path,
     order_model_path,
@@ -82,6 +84,9 @@ def load_models(
     species_model_path,
     species_labels,
 ):
+
+    # Load the flatbug model
+    flatbug_model = Predictor(model=flatbug_model_path, device=device, dtype="float16")
 
     # Load the localisation model
     weights_path = localisation_model_path
@@ -138,6 +143,7 @@ def load_models(
     print("passed")
 
     return {
+        "flatbug_model": flatbug_model,
         "localisation_model": model_loc,
         "classification_model": classification_model,
         "species_model": species_model,
