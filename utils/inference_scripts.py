@@ -197,6 +197,7 @@ def perform_inf(
         crop_status = "crop " + str(i)
         print(crop_status)
         x_min, y_min, x_max, y_max = flatbug_outputs["boxes"][i]
+
         box_score = flatbug_outputs["scores"][i]
         box_label = flatbug_outputs["labels"][i]
 
@@ -204,69 +205,68 @@ def perform_inf(
         y_min = int(int(y_min) * original_height / 300)
         x_max = int(int(x_max) * original_width / 300)
         y_max = int(int(y_max) * original_height / 300)
+        print(x_min, y_min, x_max, y_max)
 
         if box_score < box_threshold:
             continue
 
-            # Crop the detected region and perform classification
-            cropped_image = original_image.crop((x_min, y_min, x_max, y_max))
-            cropped_tensor = (
-                transform_species(cropped_image).unsqueeze(0).to(proc_device)
+        # Crop the detected region and perform classification
+        cropped_image = original_image.crop((x_min, y_min, x_max, y_max))
+        cropped_tensor = transform_species(cropped_image).unsqueeze(0).to(proc_device)
+
+        class_name, class_confidence = classify_box(cropped_tensor, binary_model)
+        order_name, order_confidence = classify_order(
+            cropped_tensor, order_model, order_labels, order_data_thresholds
+        )
+
+        # Annotate image with bounding box and class
+        if class_name == "moth" or "Lepidoptera" in order_name:
+            species_names, species_confidences = classify_species(
+                cropped_tensor, regional_model, regional_category_map, top_n
             )
 
-            class_name, class_confidence = classify_box(cropped_tensor, binary_model)
-            order_name, order_confidence = classify_order(
-                cropped_tensor, order_model, order_labels, order_data_thresholds
-            )
+        else:
+            species_names, species_confidences = [""] * top_n, [""] * top_n
 
-            # Annotate image with bounding box and class
-            if class_name == "moth" or "Lepidoptera" in order_name:
-                species_names, species_confidences = classify_species(
-                    cropped_tensor, regional_model, regional_category_map, top_n
-                )
+        # if save_crops then save the cropped image
+        crop_path = ""
+        if save_crops:
+            crop_path = image_path.replace(".jpg", f"_crop{i}.jpg")
+            cropped_image.save(crop_path)
 
-            else:
-                species_names, species_confidences = [""] * top_n, [""] * top_n
-
-            # if save_crops then save the cropped image
-            crop_path = ""
-            if save_crops:
-                crop_path = image_path.replace(".jpg", f"_crop{i}.jpg")
-                cropped_image.save(crop_path)
-
-            # append to csv with pandas
-            df = pd.DataFrame(
+        # append to csv with pandas
+        df = pd.DataFrame(
+            [
                 [
-                    [
-                        image_path,
-                        image_dt,
-                        bucket_name,
-                        current_dt,
-                        crop_status,
-                        box_score,
-                        box_label,
-                        x_min,
-                        y_min,
-                        x_max,
-                        y_max,
-                        class_name,
-                        class_confidence,
-                        order_name,
-                        order_confidence,
-                        crop_path,
-                    ]
-                    + species_names
-                    + species_confidences
-                ],
-                columns=all_cols,
-            )
+                    image_path,
+                    image_dt,
+                    bucket_name,
+                    current_dt,
+                    crop_status,
+                    box_score,
+                    box_label,
+                    x_min,
+                    y_min,
+                    x_max,
+                    y_max,
+                    class_name,
+                    class_confidence,
+                    order_name,
+                    order_confidence,
+                    crop_path,
+                ]
+                + species_names
+                + species_confidences
+            ],
+            columns=all_cols,
+        )
 
-            df.to_csv(
-                f"{csv_file}",
-                mode="a",
-                header=not os.path.isfile(csv_file),
-                index=False,
-            )
+        df.to_csv(
+            f"{csv_file}",
+            mode="a",
+            header=not os.path.isfile(csv_file),
+            index=False,
+        )
 
     # catch images where no detection or all considered too large/not confident enough
     if all(skipped):
