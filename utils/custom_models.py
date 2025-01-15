@@ -77,7 +77,6 @@ class ResNet50_order(nn.Module):
 def load_models(
     device,
     flatbug_model_path,
-    localisation_model_path,
     binary_model_path,
     order_model_path,
     order_threshold_path,
@@ -88,22 +87,7 @@ def load_models(
     # Load the flatbug model
     flatbug_model = Predictor(model=flatbug_model_path, device=device, dtype="float16")
 
-    # Load the localisation model
-    weights_path = localisation_model_path
-
-    model_loc = torchvision.models.detection.fasterrcnn_resnet50_fpn(weights=None)
     num_classes = 2  # 1 class (object) + background
-    in_features = model_loc.roi_heads.box_predictor.cls_score.in_features
-    model_loc.roi_heads.box_predictor = (
-        torchvision.models.detection.faster_rcnn.FastRCNNPredictor(
-            in_features, num_classes
-        )
-    )
-    checkpoint = torch.load(weights_path, map_location=device, weights_only=True)
-    state_dict = checkpoint.get("model_state_dict") or checkpoint
-    model_loc.load_state_dict(state_dict)
-    model_loc = model_loc.to(device)
-    model_loc.eval()
 
     # Load the binary model
     weights_path = binary_model_path
@@ -144,7 +128,7 @@ def load_models(
 
     return {
         "flatbug_model": flatbug_model,
-        "localisation_model": model_loc,
+        # "localisation_model": model_loc,
         "classification_model": classification_model,
         "species_model": species_model,
         "species_model_labels": species_category_map,

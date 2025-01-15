@@ -76,7 +76,7 @@ Load the conda env on Jasmin:
 
 ```bash
 source ~/miniforge3/bin/activate
-conda activate "~/conda_envs/moth_detector_env/"
+conda activate "~/conda_envs/flatbug/"
 ```
 
 _or on Baskerville_:
@@ -131,13 +131,12 @@ For a single chunk:
 
 ```bash
 python 04_process_chunks.py \
-  --chunk_id 1 \
+  --chunk_id 10 \
   --json_file './keys/solar/dep000072_workload_chunks.json' \
-  --output_dir './data/solar/dep000072' \
+  --output_dir './data/flatbug2/dep000072' \
   --bucket_name 'gbr' \
   --credentials_file './credentials.json' \
   --csv_file 'dep000072.csv' \
-  --localisation_model_path ./models/fasterrcnn_resnet50_fpn_tz53qv9v.pt \
   --species_model_path ./models/turing-uk_v03_resnet50_2024-05-13-10-03_state.pt \
   --species_labels ./models/03_uk_data_category_map.json \
   --perform_inference \
@@ -187,6 +186,7 @@ Then [find the correct torch command](https://pytorch.org/get-started/locally/) 
 ```bash
 conda install pytorch torchvision torchaudio pytorch-cuda=12.4 -c pytorch -c nvidia
 ```
+
 Install other requirements:
 
 ```bash
