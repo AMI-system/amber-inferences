@@ -81,7 +81,6 @@ def load_models(
 ):
 
     # Load the flatbug model
-    print("Flatbug device:", device)
     flatbug_model = Predictor(model=flatbug_model_path, device=device, dtype="float16")
 
     num_classes = 2  # 1 class (object) + background

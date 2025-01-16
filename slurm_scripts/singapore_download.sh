@@ -1,7 +1,7 @@
 #!/bin/bash
 
 #SBATCH --job-name=process_chunks
-#SBATCH --output=./logs/solar_fields.out
+#SBATCH --output=./logs/singapore_download.out
 #SBATCH --time=01:00:00
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=1
@@ -11,12 +11,21 @@
 source ~/miniforge3/bin/activate
 conda activate "~/conda_envs/moth_detector_env/"
 
-json_directory="./keys/solar"
-region="gbr"
-output_base_dir="./data/solar/${region}"
+json_directory="./keys/singapore/"
+region="sgp"
+output_base_dir="./data/singapore_download/"
 credentials_file="./credentials.json"
 
-for json_file in ${json_directory}/dep000072_workload_chunks.json; do
+# get the keys for deployments of interest and chunk
+deps=('dep000045')
+
+for dep in "${deps[@]}"; do
+    echo $dep
+    python 02_generate_keys.py --bucket $region --deployment_id $dep --output_file "${json_directory}/${dep}_keys.txt"
+    python 03_pre_chop_files.py --input_file "${json_directory}/${dep}_keys.txt" --file_extensions "jpg" "jpeg" --chunk_size 100 --output_file "${json_directory}/${dep}_workload_chunks.json"
+done
+
+for json_file in ${json_directory}/*_workload_chunks.json; do
   if [[ ! -f "$json_file" ]]; then
     echo "No matching files found in ${json_directory}/"
     continue
@@ -51,7 +60,7 @@ except Exception as e:
     sbatch <<EOF
 #!/bin/bash
 #SBATCH --job-name=chunk_${deployment_id}_${chunk_id}
-#SBATCH --output=./logs/solar/${deployment_id}_chunk_${chunk_id}.out
+#SBATCH --output=logs/singapore/${deployment_id}/chunk_${deployment_id}_${chunk_id}.out
 #SBATCH --time=04:00:00
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=1
@@ -66,15 +75,7 @@ python 04_process_chunks.py \
   --json_file "$json_file" \
   --output_dir "$output_base_dir/$deployment_id" \
   --bucket_name "$region" \
-  --credentials_file "$credentials_file" \
-  --csv_file "$output_base_dir/${deployment_id}_${chunk_id}.csv" \
-  --localisation_model_path ./models/fasterrcnn_resnet50_fpn_tz53qv9v.pt \
-  --box_threshold 0.8 \
-  --species_model_path ./models/turing-uk_v03_resnet50_2024-05-13-10-03_state.pt \
-  --species_labels ./models/03_uk_data_category_map.json \
-  --perform_inference \
-  --save_crops \
-  --remove_image
+  --credentials_file "$credentials_file"
 EOF
 
     if [ $? -ne 0 ]; then
@@ -85,9 +86,3 @@ EOF
 done
 
 echo "All chunk jobs submitted successfully."
-
-echo "Combining outputs into one csv"
-python 05_combine_outputs.py \
-  --csv_file_pattern "$output_base_dir/${deployment_id}_*.csv" \
-  --main_csv_file "$output_base_dir/${deployment_id}.csv" \
-  --remove_chunk_files

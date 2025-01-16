@@ -4,8 +4,8 @@ This directory is designed to download images from Jasmin object store and perfo
 - detect objects
 - classify objects as moth or non-moth
 - identify the order
+- predict the species
 
-This branch is designed to save crops of beetles.
 
 ## JASMIN Set-Up
 
@@ -76,7 +76,7 @@ Load the conda env on Jasmin:
 
 ```bash
 source ~/miniforge3/bin/activate
-conda activate "~/conda_envs/moth_detector_env/"
+conda activate "~/conda_envs/flatbug/"
 ```
 
 _or on Baskerville_:
@@ -137,7 +137,6 @@ python 04_process_chunks.py \
   --bucket_name 'gbr' \
   --credentials_file './credentials.json' \
   --csv_file 'dep000034.csv' \
-  --localisation_model_path ./models/fasterrcnn_resnet50_fpn_tz53qv9v.pt \
   --perform_inference \
   --remove_image \
   --save_crops
@@ -172,4 +171,39 @@ To check the slurm queue:
 
 ```bash
 squeue -u USERNAME
+```
+
+## Running on Orchid
+
+Install the correct torch for the drivers:
+
+```bash
+nvidia-smi
+```
+
+Then [find the correct torch command](https://pytorch.org/get-started/locally/) for that CUDA version. For Cuda 12.4:
+
+```bash
+conda install pytorch torchvision torchaudio pytorch-cuda=12.4 -c pytorch -c nvidia
+```
+
+Install other requirements:
+
+```bash
+conda install --yes --file requirements.txt
+
+# install flatbug
+git clone git@github.com:darsa-group/flat-bug.git
+cd flat-bug
+git checkout develop
+pip install -e .
+```
+
+To run:
+
+```bash
+source ~/miniforge3/bin/activate
+conda activate "~/conda_envs/flatbug"
+
+sbatch ./slurm_scripts/flatbug_test.sh
 ```

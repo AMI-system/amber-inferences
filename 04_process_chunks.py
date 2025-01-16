@@ -186,7 +186,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--flatbug_model_path",
         type=str,
-        help="Path to the flatbug model",
+        help="Path to the flatbug model weights.",
         default="./models/flat_bug_M.pt",
     )
     parser.add_argument(

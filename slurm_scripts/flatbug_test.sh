@@ -1,19 +1,21 @@
 #!/bin/bash
 
-#SBATCH --job-name=process_chunks
-#SBATCH --output=./logs/solar_fields.out
+#SBATCH --job-name=flatbug
+#SBATCH --output=./logs/flatbug.out
 #SBATCH --time=01:00:00
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=1
 #SBATCH --mem=4G
-#SBATCH --partition=long-serial
+#SBATCH --gres=gpu:1
+#SBATCH --partition=orchid
+#SBATCH --account=orchid
 
 source ~/miniforge3/bin/activate
-conda activate "~/conda_envs/moth_detector_env/"
+conda activate "~/conda_envs/flatbug/"
 
 json_directory="./keys/solar"
 region="gbr"
-output_base_dir="./data/solar/${region}"
+output_base_dir="./data/flatbug"
 credentials_file="./credentials.json"
 
 for json_file in ${json_directory}/dep000072_workload_chunks.json; do
@@ -51,15 +53,17 @@ except Exception as e:
     sbatch <<EOF
 #!/bin/bash
 #SBATCH --job-name=chunk_${deployment_id}_${chunk_id}
-#SBATCH --output=./logs/solar/${deployment_id}_chunk_${chunk_id}.out
+#SBATCH --output=./logs/flatbug/${deployment_id}_chunk_${chunk_id}.out
 #SBATCH --time=04:00:00
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=1
 #SBATCH --mem=8G
-#SBATCH --partition=short-serial
+#SBATCH --gres=gpu:1
+#SBATCH --partition=orchid
+#SBATCH --account=orchid
 
 source ~/miniforge3/bin/activate
-conda activate "~/conda_envs/moth_detector_env/"
+conda activate "~/conda_envs/flatbug/"
 
 python 04_process_chunks.py \
   --chunk_id $chunk_id \
@@ -68,8 +72,7 @@ python 04_process_chunks.py \
   --bucket_name "$region" \
   --credentials_file "$credentials_file" \
   --csv_file "$output_base_dir/${deployment_id}_${chunk_id}.csv" \
-  --localisation_model_path ./models/fasterrcnn_resnet50_fpn_tz53qv9v.pt \
-  --box_threshold 0.8 \
+  --box_threshold 0.6 \
   --species_model_path ./models/turing-uk_v03_resnet50_2024-05-13-10-03_state.pt \
   --species_labels ./models/03_uk_data_category_map.json \
   --perform_inference \
@@ -83,11 +86,3 @@ EOF
     fi
   done
 done
-
-echo "All chunk jobs submitted successfully."
-
-echo "Combining outputs into one csv"
-python 05_combine_outputs.py \
-  --csv_file_pattern "$output_base_dir/${deployment_id}_*.csv" \
-  --main_csv_file "$output_base_dir/${deployment_id}.csv" \
-  --remove_chunk_files
