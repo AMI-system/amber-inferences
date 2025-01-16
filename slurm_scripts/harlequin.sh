@@ -1,18 +1,20 @@
 #!/bin/bash
 
 #SBATCH --job-name=process_chunks
-#SBATCH --output=./logs/harlequin_new_loc.out
+#SBATCH --output=./logs/harlequin_flatbug.out
 #SBATCH --time=01:00:00
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=1
 #SBATCH --mem=4G
-#SBATCH --partition=long-serial
+#SBATCH --gres=gpu:1
+#SBATCH --partition=orchid
+#SBATCH --account=orchid
 
 source ~/miniforge3/bin/activate
-conda activate "~/conda_envs/moth_detector_env/"
+conda activate "~/conda_envs/flatbug/"
 
 json_directory="./keys/harlequin"
-output_base_dir="./data/harlequin_new_loc_model/"
+output_base_dir="./data/harlequin_flatbug/"
 credentials_file="./credentials.json"
 
 
@@ -72,21 +74,23 @@ except Exception as e:
     continue
   fi
 
-  for chunk_id in $(seq 1 "$num_chunks"); do
+  for chunk_id in $(seq 1 2); do #"$num_chunks"); do
     echo "Submitting job for chunk $chunk_id of deployment $deployment_id"
 
     sbatch <<EOF
 #!/bin/bash
 #SBATCH --job-name=chunk_${deployment_id}_${chunk_id}
-#SBATCH --output=logs/harlequin_new_loc/${region}/${deployment_id}/${deployment_id}_chunk_${chunk_id}.out
+#SBATCH --output=logs/harlequin_flatbug/${region}/${deployment_id}/${deployment_id}_chunk_${chunk_id}.out
 #SBATCH --time=04:00:00
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=1
 #SBATCH --mem=8G
-#SBATCH --partition=short-serial
+#SBATCH --gres=gpu:1
+#SBATCH --partition=orchid
+#SBATCH --account=orchid
 
 source ~/miniforge3/bin/activate
-conda activate "~/conda_envs/moth_detector_env/"
+conda activate "~/conda_envs/flatbug/"
 
 echo $region
 
@@ -97,8 +101,7 @@ python -u 04_process_chunks.py \
   --bucket_name "$region" \
   --credentials_file "$credentials_file" \
   --csv_file "$output_base_dir/${deployment_id}_${chunk_id}.csv" \
-  --localisation_model_path ./models/fasterrcnn_resnet50_fpn_tz53qv9v.pt \
-  --box_threshold 0.8 \
+  --box_threshold 0.0 \
   --perform_inference \
   --remove_image \
   --save_crops
