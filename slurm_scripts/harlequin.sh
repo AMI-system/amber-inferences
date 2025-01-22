@@ -38,13 +38,11 @@ pan_deps=('dep000020' 'dep000021' 'dep000022' 'dep000083' 'dep000084' 'dep000086
 #     python 03_pre_chop_files.py --input_file "${json_directory}/${region}/${dep}_keys.txt" --file_extensions "jpg" "jpeg" --chunk_size 50 --output_file "${json_directory}/${region}/${dep}_workload_chunks.json"
 # done
 
-
-
 # Perform the inferences
-for json_file in ${json_directory}/*/dep000022_workload_chunks.json; do
+for json_file in ${json_directory}/*/dep*_workload_chunks.json; do
 
   if [[ ! -f "$json_file" ]]; then
-    echo "No matching files found in ${json_directory}/"
+    echo "No matching files found in ${json_directory}/ for ${dep}"
     continue
   fi
 
@@ -74,7 +72,7 @@ except Exception as e:
     continue
   fi
 
-  for chunk_id in $(seq 1 2); do #"$num_chunks"); do
+  for chunk_id in $(seq 1 "$num_chunks"); do
     echo "Submitting job for chunk $chunk_id of deployment $deployment_id"
 
     sbatch <<EOF

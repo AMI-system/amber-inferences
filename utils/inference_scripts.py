@@ -16,11 +16,11 @@ def flatbug(image_path, flatbug_model):
     output = flatbug_model(image_path)
 
     # Save a visualization of the predictions
-    if len(output.json_data["boxes"]) > 0:
-        print(f"Saving annotated image: {image_path}")
-        output.plot(
-            outpath=f"{os.path.dirname(image_path)}/flatbug/flatbug_{os.path.basename(image_path)}"
-        )
+    # if len(output.json_data["boxes"]) > 0:
+    #     print(f"Saving annotated image: {image_path}")
+    #     output.plot(
+    #         outpath=f"{os.path.dirname(image_path)}/flatbug/flatbug_{os.path.basename(image_path)}"
+    #     )
 
     # rename the confs item as scores
     crop_info = output.json_data
@@ -108,7 +108,6 @@ def perform_inf(
         "image_path",
         "image_datetime",
         "bucket_name",
-        "image_datetime",
         "analysis_datetime",
         "crop_status",
         "box_score",
@@ -125,20 +124,17 @@ def perform_inf(
     ]
 
     # extract the datetime from the image path
-    image_dt = os.path.basename(image_path).split("-")[0]
-    image_dt = datetime.strptime(image_dt, "%Y%m%d%H%M%S%f")
-    image_dt = datetime.strftime(image_dt, "%Y-%m-%d %H:%M:%S")
-
-    current_dt = datetime.now()
-    current_dt = datetime.strftime(current_dt, "%Y-%m-%d %H:%M:%S")
-
-    if not os.path.exists(f"{os.path.dirname(image_path)}/flatbug/"):
-        os.makedirs(f"{os.path.dirname(image_path)}/flatbug/")
-
-    # extract the datetime from the image path
-    image_dt = os.path.basename(image_path).split("-")[0]
-    image_dt = datetime.strptime(image_dt, "%Y%m%d%H%M%S%f")
-    image_dt = datetime.strftime(image_dt, "%Y-%m-%d %H:%M:%S")
+    # some images have a different format, so we need to check for that
+    # method: split the filename by "-" and take the part which starts with 20
+    image_dt = os.path.basename(image_path).split("-")
+    image_dt = [x for x in image_dt if x.startswith("20")]
+    if len(image_dt) == 1:
+        image_dt = image_dt[0]
+        image_dt = datetime.strptime(image_dt, "%Y%m%d%H%M%S%f")
+        image_dt = datetime.strftime(image_dt, "%Y-%m-%d %H:%M:%S")
+    else:
+        print(f"Warning: {image_path} does not match the expected datetime format.")
+        image_dt = "Image string not compatible with date format"
 
     current_dt = datetime.now()
     current_dt = datetime.strftime(current_dt, "%Y-%m-%d %H:%M:%S")
