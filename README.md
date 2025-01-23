@@ -77,9 +77,12 @@ Load the conda env on Jasmin:
 ```bash
 source ~/miniforge3/bin/activate
 conda activate "~/conda_envs/flatbug/"
+
+cd amber-inferences
+pip install -e .
 ```
 
-_or on Baskerville_:
+<!-- _or on Baskerville_:
 
 ```bash
 module load bask-apps/live
@@ -89,7 +92,7 @@ module load Miniforge3/24.1.2-0
 eval "$(${EBROOTMINIFORGE3}/bin/conda shell.bash hook)"
 source "${EBROOTMINIFORGE3}/etc/profile.d/mamba.sh"
 mamba activate "/bask/projects/v/vjgo8416-amber/moth_detector_env"
-```
+``` -->
 
 The multi-core pipeline is run in several steps:
 
