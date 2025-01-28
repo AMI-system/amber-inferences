@@ -1,0 +1,17 @@
+[project]
+name = "amber_inferences"
+version = "0.0.1"
+authors = [
+  { name="Katriona Goldmann", email="kgoldmann@turing.ac.uk" },
+]
+description = "A package to perform species classification on JASMIN"
+readme = "README.md"
+requires-python = ">=3.9"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Operating System :: OS Independent",
+]
+
+[project.urls]
+Homepage = "https://github.com/AMI-system/amber-inferences"
+Issues = "https://github.com/AMI-system/amber-inferences/issues"
