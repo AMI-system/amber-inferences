@@ -190,3 +190,4 @@ logs/
 *.out
 *.jpg
 *.csv
+.DS_Store
