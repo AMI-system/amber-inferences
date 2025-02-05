@@ -28,9 +28,8 @@ def main():
         "--file_extensions",
         type=str,
         nargs="+",
-        required=True,
         default="'jpg' 'jpeg'",
-        help="File extensions to be chuncked. If empty, all extensions used.",
+        help="File extensions to be included. If empty, all extensions used. Defauly = 'jpg' 'jpeg'",
     )
     parser.add_argument(
         "--chunk_size", type=int, default=100, help="Number of keys per chunk."
