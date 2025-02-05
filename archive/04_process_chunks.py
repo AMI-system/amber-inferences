@@ -5,7 +5,6 @@ import os
 import boto3
 import torch
 from boto3.s3.transfer import TransferConfig
-
 from utils.custom_models import load_models
 from utils.inference_scripts import perform_inf
 

@@ -4,15 +4,19 @@ version = "0.0.1"
 authors = [
   { name="Katriona Goldmann", email="kgoldmann@turing.ac.uk" },
 ]
-description = "Package to perform inferences on JASMIN"
+description = "A package to perform species classification on JASMIN"
 readme = "README.md"
-requires-python = ">=3.8"
+requires-python = ">=3.9"
 classifiers = [
     "Programming Language :: Python :: 3",
     "Operating System :: OS Independent",
 ]
 
+[project.scripts]
+amber-deployments = "amber_inferences.cli.deployments:main"
+amber-keys = "amber_inferences.cli.generate_keys:main"
+amber-inferences = "amber_inferences.cli.perform_inferences:main"
 
 [project.urls]
-Homepage = "https://www.turing.ac.uk/research/research-projects/amber-ai-assisted-monitoring-biodiversity-using-edge-processing-and"
+Homepage = "https://github.com/AMI-system/amber-inferences"
 Issues = "https://github.com/AMI-system/amber-inferences/issues"

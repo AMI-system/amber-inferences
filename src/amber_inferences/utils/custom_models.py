@@ -7,7 +7,7 @@ import timm
 import torch
 import torch.nn as nn
 import torchvision
-from flat_bug.predictor import Predictor
+# from flat_bug.predictor import Predictor
 from torchvision import models
 from torchvision.models import ResNet50_Weights
 
@@ -73,10 +73,26 @@ class ResNet50_order(nn.Module):
 
         return level_1
 
+def load_loc_model(weights_path, device):
+    # Load the localisation model
+    model_loc = torchvision.models.detection.fasterrcnn_resnet50_fpn(weights=None)
+    num_classes = 2  # 1 class (object) + background
+    in_features = model_loc.roi_heads.box_predictor.cls_score.in_features
+    model_loc.roi_heads.box_predictor = (
+        torchvision.models.detection.faster_rcnn.FastRCNNPredictor(
+            in_features, num_classes
+        )
+    )
+    checkpoint = torch.load(weights_path, map_location=device, weights_only=True)
+    state_dict = checkpoint.get("model_state_dict") or checkpoint
+    model_loc.load_state_dict(state_dict)
+    model_loc = model_loc.to(device)
+    model_loc.eval()
+    return model_loc
 
 def load_models(
     device,
-    flatbug_model_path,
+    localisation_model_path,
     binary_model_path,
     order_model_path,
     order_threshold_path,
@@ -84,15 +100,17 @@ def load_models(
     species_labels,
 ):
 
-    # Load the flatbug model
-    flatbug_model = Predictor(model=flatbug_model_path, device=device, dtype="float16")
-
-    num_classes = 2  # 1 class (object) + background
+    # Try loading the localisation model with load_loc_model
+    try:
+        localisation_model = load_loc_model(localisation_model_path, device)
+    except Exception as e:
+        print(f"Failed to load localisation model with load_loc_model: {e}")
+        localisation_model = Predictor(model=localisation_model_path, device=device, dtype="float16")
 
     # Load the binary model
     weights_path = binary_model_path
     classification_model = timm.create_model(
-        "tf_efficientnetv2_b3", num_classes=num_classes, weights=None
+        "tf_efficientnetv2_b3", num_classes=2, weights=None
     )
     classification_model = classification_model.to(device)
     checkpoint = torch.load(weights_path, map_location=device, weights_only=True)
@@ -127,8 +145,7 @@ def load_models(
     print("passed")
 
     return {
-        "flatbug_model": flatbug_model,
-        # "localisation_model": model_loc,
+        "localisation_model": localisation_model,
         "classification_model": classification_model,
         "species_model": species_model,
         "species_model_labels": species_category_map,
