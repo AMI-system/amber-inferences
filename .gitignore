@@ -14,3 +14,5 @@ logs/
 *.out
 *.jpg
 *.csv
+src/amber_inferences.egg-info/
+dist/
