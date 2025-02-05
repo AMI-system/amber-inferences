@@ -6,18 +6,9 @@ import os
 
 import boto3
 import torch
-from boto3.s3.transfer import TransferConfig
 
-from ..utils.custom_models import load_models
-from ..utils.inference_scripts import download_and_analyse
-
-# Transfer configuration for optimised S3 download
-transfer_config = TransferConfig(
-    max_concurrency=20,  # Increase the number of concurrent transfers
-    multipart_threshold=8 * 1024 * 1024,  # 8MB
-    max_io_queue=1000,
-    io_chunksize=262144,  # 256KB
-)
+from amber_inferences.utils.custom_models import load_models
+from amber_inferences.utils.inference_scripts import download_and_analyse, initialise_session
 
 def main(
     chunk_id,
@@ -28,7 +19,7 @@ def main(
     remove_image=True,
     perform_inference=True,
     save_crops=False,
-    flatbug_model=None,
+    localisation_model=None,
     box_threshold=0.99,
     binary_model=None,
     order_model=None,
@@ -67,7 +58,7 @@ def main(
         remove_image=remove_image,
         perform_inference=perform_inference,
         save_crops=save_crops,
-        flatbug_model=flatbug_model,
+        localisation_model=localisation_model,
         box_threshold=box_threshold,
         binary_model=binary_model,
         order_model=order_model,
@@ -113,9 +104,9 @@ if __name__ == "__main__":
         "--save_crops", action="store_true", help="Whether to save the crops."
     )
     parser.add_argument(
-        "--flatbug_model_path",
+        "--localisation_model_path",
         type=str,
-        help="Path to the flatbug model weights.",
+        help="Path to the localisation model weights.",
         default=None, #"./models/flat_bug_M.pt",
     )
     parser.add_argument(
@@ -190,7 +181,7 @@ if __name__ == "__main__":
 
     models = load_models(
         device,
-        args.flatbug_model_path,
+        args.localisation_model_path,
         args.binary_model_path,
         args.order_model_path,
         args.order_thresholds_path,
@@ -207,7 +198,7 @@ if __name__ == "__main__":
         remove_image=args.remove_image,
         save_crops=args.save_crops,
         perform_inference=args.perform_inference,
-        flatbug_model=models["flatbug_model"],
+        localisation_model=models["localisation_model"],
         box_threshold=args.box_threshold,
         binary_model=models["classification_model"],
         order_model=models["order_model"],
