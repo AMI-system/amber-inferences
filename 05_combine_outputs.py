@@ -28,7 +28,7 @@ def main(
     # Combine and remove csv files
     glued_data = pd.DataFrame()
     for file_name in glob.glob(csv_file_pattern):
-        print(f"Adding {file_name}")
+        print(f"Processing {file_name}")
         x = pd.read_csv(file_name, low_memory=False)
         glued_data = pd.concat([glued_data, x], axis=0)
         if remove_chunk_files:

@@ -139,9 +139,6 @@ def perform_inf(
     current_dt = datetime.now()
     current_dt = datetime.strftime(current_dt, "%Y-%m-%d %H:%M:%S")
 
-    if not os.path.exists(f"{os.path.dirname(image_path)}/flatbug/"):
-        os.makedirs(f"{os.path.dirname(image_path)}/flatbug/")
-
     try:
         image = Image.open(image_path).convert("RGB")
     except Exception as e:
@@ -166,6 +163,8 @@ def perform_inf(
     original_image = image.copy()
     original_width, original_height = image.size
 
+    # input_tensor = transform_loc(image).unsqueeze(0).to(proc_device)
+
     skipped = []
 
     print(flatbug_outputs["scores"])
@@ -185,10 +184,10 @@ def perform_inf(
         box_score = flatbug_outputs["scores"][i]
         box_label = flatbug_outputs["labels"][i]
 
-        x_min = int(int(x_min) * original_width / 300)
-        y_min = int(int(y_min) * original_height / 300)
-        x_max = int(int(x_max) * original_width / 300)
-        y_max = int(int(y_max) * original_height / 300)
+        x_min = int(int(x_min))
+        y_min = int(int(y_min))
+        x_max = int(int(x_max))
+        y_max = int(int(y_max))
         print(x_min, y_min, x_max, y_max)
 
         if box_score < box_threshold:
