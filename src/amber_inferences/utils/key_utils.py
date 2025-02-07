@@ -67,7 +67,7 @@ def save_keys_to_file(keys, output_file):
             f.write(key + "\n")
 
 
-def load_workload(input_file, file_extensions):
+def load_workload(input_file, file_extensions, subset_dates=None):
     """
     Load workload from a file. Assumes each line contains an S3 key.
     """
@@ -75,6 +75,18 @@ def load_workload(input_file, file_extensions):
         all_keys = [line.strip() for line in f.readlines()]
 
     subset_keys = [x for x in all_keys if x.endswith(tuple(file_extensions))]
+
+    # subset by dates
+    if subset_dates:
+        subset_dates = [date.replace("-", "") for date in subset_dates]
+        subset_keys = [
+            x for x in subset_keys if any(date in x for date in subset_dates)
+        ]
+
+        if len(subset_keys) == 0:
+            print(
+                "No keys found for the specified dates. Please check the date format (YYYY-MM-DD) and try again."
+            )
 
     # remove corrupt keys
     subset_keys = [x for x in subset_keys if not os.path.basename(x).startswith("$")]
