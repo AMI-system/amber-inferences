@@ -236,7 +236,6 @@ def perform_inf(
     # for each detection
     for i in range(0, len(box_coords)):
         crop_status = "crop " + str(i)
-        print(crop_status)
         x_min, y_min, x_max, y_max = box_coords[i]
 
         box_score = localisation_outputs["scores"][i]
@@ -256,7 +255,6 @@ def perform_inf(
 
         # Annotate image with bounding box and class
         if class_name == "moth" or "Lepidoptera" in order_name:
-            print("species classifier")
             species_names, species_confidences = classify_species(
                 cropped_tensor, regional_model, regional_category_map, top_n
             )
@@ -268,7 +266,8 @@ def perform_inf(
         crop_path = ""
         if save_crops and i > 0:
             crop_path = image_path.replace(".jpg", f"_crop{i}.jpg")
-            print(crop_path)
+
+
             cropped_image.save(crop_path)
 
         # append to csv with pandas
