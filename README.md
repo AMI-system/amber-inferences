@@ -296,3 +296,8 @@ amber-inferences --chunk_id 1 \
 
 # For Developers
 
+Performing the tests:
+
+```sh
+python3 -m unittest discover -s tests
+```

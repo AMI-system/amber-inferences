@@ -191,6 +191,9 @@ if __name__ == "__main__":
         if not os.path.exists(os.path.abspath(mod_path)):
             raise FileNotFoundError(f"Model path not found: {mod_path}")
 
+    if not os.path.exists(os.path.abspath(args.json_file)):
+            raise FileNotFoundError(f"JSON file not found: {args.json_file}")
+
 
     models = load_models(
         device,
