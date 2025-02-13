@@ -7,7 +7,6 @@ import timm
 import torch
 import torch.nn as nn
 import torchvision
-# from flat_bug.predictor import Predictor
 from torchvision import models
 from torchvision.models import ResNet50_Weights
 
@@ -104,7 +103,8 @@ def load_models(
     try:
         localisation_model = load_loc_model(localisation_model_path, device)
     except Exception as e:
-        print(f"Failed to load localisation model with load_loc_model: {e}")
+        print(f"Failed to load localisation model with load_loc_model: {e}, trying flatbug")
+        from flat_bug.predictor import Predictor
         localisation_model = Predictor(model=localisation_model_path, device=device, dtype="float16")
 
     # Load the binary model

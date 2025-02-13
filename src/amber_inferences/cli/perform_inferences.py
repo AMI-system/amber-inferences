@@ -179,14 +179,27 @@ if __name__ == "__main__":
             + "\N{Cross Mark}\033[0m\033[0m"
         )
 
+
+    # check if the model paths exist
+    for mod_path in [args.localisation_model_path,
+                    args.binary_model_path,
+                    args.order_model_path,
+                    args.order_thresholds_path,
+                    args.species_model_path,
+                    args.species_labels]:
+
+        if not os.path.exists(os.path.abspath(mod_path)):
+            raise FileNotFoundError(f"Model path not found: {mod_path}")
+
+
     models = load_models(
         device,
-        args.localisation_model_path,
-        args.binary_model_path,
-        args.order_model_path,
-        args.order_thresholds_path,
-        args.species_model_path,
-        args.species_labels,
+        os.path.abspath(args.localisation_model_path),
+        os.path.abspath(args.binary_model_path),
+        os.path.abspath(args.order_model_path),
+        os.path.abspath(args.order_thresholds_path),
+        os.path.abspath(args.species_model_path),
+        os.path.abspath(args.species_labels),
     )
 
     main(
