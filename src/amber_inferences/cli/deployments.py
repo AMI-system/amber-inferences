@@ -18,10 +18,10 @@ def main():
         help="Flag to include inactive deployments.",
     )
     parser.add_argument(
-        "--print_image_count",
+        "--print_file_count",
         action=argparse.BooleanOptionalAction,
         default=False,
-        help="Flag to print the number of images per deployment.",
+        help="Flag to print the number of files per deployment.",
     )
     parser.add_argument(
         "--subset_countries",
