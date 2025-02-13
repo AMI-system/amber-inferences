@@ -142,7 +142,6 @@ def load_models(
     state_dict = checkpoint.get("model_state_dict") or checkpoint
     species_model.load_state_dict(state_dict)
     species_model.eval()
-    print("passed")
 
     return {
         "localisation_model": localisation_model,
