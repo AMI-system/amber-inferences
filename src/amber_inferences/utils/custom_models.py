@@ -91,64 +91,76 @@ def load_loc_model(weights_path, device):
 
 def load_models(
     device,
-    localisation_model_path,
-    binary_model_path,
-    order_model_path,
-    order_threshold_path,
-    species_model_path,
-    species_labels,
+    localisation_model_path=None,
+    binary_model_path=None,
+    order_model_path=None,
+    order_threshold_path=None,
+    species_model_path=None,
+    species_labels=None,
 ):
+    """
+    Function to load in the relevant models from weight paths.
+    """
+    model_dict = {
+        "localisation_model": None,
+        "classification_model":  None,
+        "species_model":  None,
+        "species_model_labels":  None,
+        "order_model":  None,
+        "order_model_thresholds":  None,
+        "order_model_labels":  None,
+    }
 
-    # Try loading the localisation model with load_loc_model
-    try:
-        localisation_model = load_loc_model(localisation_model_path, device)
-    except Exception as e:
-        print(f"Failed to load localisation model with load_loc_model: {e}, trying flatbug")
-        from flat_bug.predictor import Predictor
-        localisation_model = Predictor(model=localisation_model_path, device=device, dtype="float16")
+    # Try loading the localisation model with load_loc_model, if not none
+    if localisation_model_path is not None:
+        try:
+            localisation_model = load_loc_model(localisation_model_path, device)
+        except Exception as e:
+            print(f"Failed to load localisation model with load_loc_model: {e}, trying flatbug")
+            from flat_bug.predictor import Predictor
+            localisation_model = Predictor(model=localisation_model_path, device=device, dtype="float16")
+        model_dict['localisation_model'] = localisation_model
 
     # Load the binary model
-    weights_path = binary_model_path
-    classification_model = timm.create_model(
-        "tf_efficientnetv2_b3", num_classes=2, weights=None
-    )
-    classification_model = classification_model.to(device)
-    checkpoint = torch.load(weights_path, map_location=device, weights_only=True)
-    state_dict = checkpoint.get("model_state_dict") or checkpoint
-    classification_model.load_state_dict(state_dict)
-    classification_model.eval()
+    if binary_model_path is not None:
+        classification_model = timm.create_model(
+            "tf_efficientnetv2_b3", num_classes=2, weights=None
+        )
+        classification_model = classification_model.to(device)
+        checkpoint = torch.load(binary_model_path, map_location=device, weights_only=True)
+        state_dict = checkpoint.get("model_state_dict") or checkpoint
+        classification_model.load_state_dict(state_dict)
+        classification_model.eval()
+        model_dict['classification_model'] = classification_model
 
     # Load the order model
-    savedWeights = order_model_path
-    thresholdFile = order_threshold_path
-    order_data_thresholds = pd.read_csv(thresholdFile)
-    order_labels = order_data_thresholds["ClassName"].to_list()
-    num_classes = len(order_labels)
-    model_order = ResNet50_order(num_classes=num_classes)
-    model_order.load_state_dict(
-        torch.load(savedWeights, map_location=device, weights_only=True)
-    )
-    model_order = model_order.to(device)
-    model_order.eval()
+    if order_model_path is not None:
+        thresholdFile = order_threshold_path
+        order_data_thresholds = pd.read_csv(thresholdFile)
+        order_labels = order_data_thresholds["ClassName"].to_list()
+        num_classes = len(order_labels)
+        model_order = ResNet50_order(num_classes=num_classes)
+        model_order.load_state_dict(
+            torch.load(order_model_path, map_location=device, weights_only=True)
+        )
+        model_order = model_order.to(device)
+        model_order.eval()
+        model_dict['order_model'] = order_model
+        model_dict['order_model_thresholds'] = order_data_thresholds
+        model_dict['order_model_labels'] = order_labels
 
     # Load the species classifier model
-    weights = species_model_path
-    species_category_map = json.load(open(species_labels))
-    num_classes = len(species_category_map)
-    species_model = Resnet50_species(num_classes=num_classes)
-    species_model = species_model.to(device)
-    checkpoint = torch.load(weights, map_location=device, weights_only=True)
-    # The model state dict is nested in some checkpoints, and not in others
-    state_dict = checkpoint.get("model_state_dict") or checkpoint
-    species_model.load_state_dict(state_dict)
-    species_model.eval()
+    if species_model_path is not None:
+        species_category_map = json.load(open(species_labels))
+        num_classes = len(species_category_map)
+        species_model = Resnet50_species(num_classes=num_classes)
+        species_model = species_model.to(device)
+        checkpoint = torch.load(species_model_path, map_location=device, weights_only=True)
+        # The model state dict is nested in some checkpoints, and not in others
+        state_dict = checkpoint.get("model_state_dict") or checkpoint
+        species_model.load_state_dict(state_dict)
+        species_model.eval()
+        model_dict['species_model'] = species_model
+        model_dict['species_model_labels'] = species_category_map
 
-    return {
-        "localisation_model": localisation_model,
-        "classification_model": classification_model,
-        "species_model": species_model,
-        "species_model_labels": species_category_map,
-        "order_model": model_order,
-        "order_model_thresholds": order_data_thresholds,
-        "order_model_labels": order_labels,
-    }
+    return model_dict

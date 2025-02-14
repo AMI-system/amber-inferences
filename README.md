@@ -294,6 +294,26 @@ amber-inferences --chunk_id 1 \
     --save_crops
 ```
 
+
+# Piecemeal
+
+## Localisation
+
+```sh
+python3 -m amber_inferences.cli.localisation \
+  --chunk_id 1 \
+  --json_file './examples/dep000022_subset_keys.json' \
+  --output_dir './data/examples/dep000022_examples' \
+  --bucket_name 'pan' \
+  --credentials_file './credentials.json' \
+  --csv_file './data/examples/dep000022_examples/dep000022.csv' \
+  --localisation_model_path ./models/v1_localizmodel_2021-08-17-12-06.pt \
+  --perform_inference \
+  --box_threshold 0.99 \
+  --save_crops
+```
+
+
 # For Developers
 
 Performing the tests:

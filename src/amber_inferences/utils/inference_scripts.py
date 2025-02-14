@@ -130,6 +130,211 @@ def classify_box(image_tensor, binary_model):
     score = predictions.max(axis=1).astype(float)[0]
     return label, score
 
+def crop_image_only(
+    image_path,
+    bucket_name,
+    localisation_model,
+    proc_device,
+    csv_file,
+    save_crops,
+    box_threshold=0.995,
+    job_name=None,
+):
+    transform_species = transforms.Compose(
+        [
+            transforms.Resize((300, 300)),
+            transforms.ToTensor(),
+            transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5]),
+        ]
+    )
+
+    all_cols = [
+        "image_path",
+        "image_datetime",
+        "bucket_name",
+        "analysis_datetime",
+        "job_name",
+        "crop_status",
+        "box_score",
+        "box_label",
+        "x_min",
+        "y_min",
+        "x_max",
+        "y_max",  # localisation info
+        "cropped_image_path",
+    ]
+
+    # extract the datetime from the image path
+    image_dt = os.path.basename(image_path).split("-")[0]
+    image_dt = datetime.strptime(image_dt, "%Y%m%d%H%M%S%f")
+    image_dt = datetime.strftime(image_dt, "%Y-%m-%d %H:%M:%S")
+
+    current_dt = datetime.now()
+    current_dt = datetime.strftime(current_dt, "%Y-%m-%d %H:%M:%S")
+
+    try:
+        # check if image_path viable
+        if not os.path.exists(image_path):
+            raise FileNotFoundError(f"Image file not found: {image_path}")
+        image_path = os.path.abspath(image_path)
+        image = Image.open(image_path).convert("RGB")
+    except Exception as e:
+        print(f"Error opening image {image_path}: {e}")
+
+        df = pd.DataFrame(
+            [
+                [image_path, image_dt, bucket_name, current_dt, job_name, "IMAGE CORRUPT"]
+                + [""] * (len(all_cols) - 6),
+            ],
+            columns=all_cols,
+        )
+
+        df.to_csv(
+            f"{csv_file}",
+            mode="a",
+            header=not os.path.isfile(csv_file),
+            index=False,
+        )
+        return  # Skip this image
+
+    original_image = image.copy()
+    original_width, original_height = image.size
+
+    print('Inference for the localisation model...')
+    localisation_outputs, box_coords = get_boxes(localisation_model, image, image_path, original_width, original_height, proc_device)
+
+    skipped = []
+
+    # catch no crops: if no boxes or all boxes below threshold
+    if len(box_coords) == 0 or all(
+        [score < box_threshold for score in localisation_outputs["scores"]]
+    ):
+        skipped = [True]
+
+    # for each detection
+    for i in range(0, len(box_coords)):
+        crop_status = "crop " + str(i)
+        x_min, y_min, x_max, y_max = box_coords[i]
+
+        box_score = localisation_outputs["scores"][i]
+        box_label = localisation_outputs["labels"][i]
+
+        if box_score < box_threshold:
+            continue
+
+        # Crop the detected region and perform classification
+        cropped_image = original_image.crop((x_min, y_min, x_max, y_max))
+
+        # if save_crops then save the cropped image
+        crop_path = ""
+        if save_crops and i > 0:
+            crop_path = image_path.replace(".jpg", f"_crop{i}.jpg").replace("snapshots", "crops")
+            cropped_image.save(crop_path)
+
+        # append to csv with pandas
+        df = pd.DataFrame(
+            [
+                [
+                    image_path,
+                    image_dt,
+                    bucket_name,
+                    current_dt,
+                    job_name,
+                    crop_status,
+                    box_score,
+                    box_label,
+                    x_min,
+                    y_min,
+                    x_max,
+                    y_max,
+                    crop_path,
+                ]
+            ],
+            columns=all_cols,
+        )
+
+        df.to_csv(
+            f"{csv_file}",
+            mode="a",
+            header=not os.path.isfile(csv_file),
+            index=False,
+        )
+
+    # catch images where no detection or all considered too large/not confident enough
+    if all(skipped):
+        df = pd.DataFrame(
+            [
+                [
+                    image_path,
+                    image_dt,
+                    bucket_name,
+                    current_dt,
+                    job_name,
+                    "NO DETECTIONS FOR IMAGE",
+                ]
+                + [""] * (len(all_cols) - 6),
+            ],
+            columns=all_cols,
+        )
+        df.to_csv(
+            f"{csv_file}",
+            mode="a",
+            header=not os.path.isfile(csv_file),
+            index=False,
+        )
+
+def localisation_only(
+    keys,
+    output_dir,
+    bucket_name,
+    client,
+    remove_image=True,
+    perform_inference=True,
+    save_crops=False,
+    localisation_model=None,
+    box_threshold=0.99,
+    device=None,
+    csv_file="results.csv",
+    job_name=None
+):
+    """
+    Download images from S3 and perform analysis.
+
+    Args:
+        keys (list): List of S3 keys to process.
+        output_dir (str): Directory to save downloaded files and results.
+        bucket_name (str): S3 bucket name.
+        client (boto3.Client): Initialised S3 client.
+        Other args: Parameters for inference and analysis.
+    """
+    # Ensure output directory exists
+    os.makedirs(output_dir, exist_ok=True)
+    os.makedirs(os.path.join(output_dir, 'snapshots'), exist_ok=True)
+    os.makedirs(os.path.join(output_dir, 'crops'), exist_ok=True)
+
+    for key in keys:
+        local_path = os.path.join(os.path.join(output_dir, 'snapshots'), os.path.basename(key))
+        print(f"Downloading {key} to {local_path}")
+        client.download_file(bucket_name, key, local_path, Config=transfer_config)
+
+        # Perform image analysis if enabled
+        print(f"Analysing {local_path}")
+        if perform_inference:
+            crop_image_only(
+                local_path,
+                bucket_name=bucket_name,
+                localisation_model=localisation_model,
+                box_threshold=box_threshold,
+                proc_device=device,
+                csv_file=csv_file,
+                save_crops=save_crops,
+                job_name=job_name
+            )
+        # Remove the image if cleanup is enabled
+        if remove_image:
+            os.remove(local_path)
+
+
 
 def perform_inf(
     image_path,
