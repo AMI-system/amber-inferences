@@ -16,11 +16,11 @@ def flatbug(image_path, flatbug_model):
     output = flatbug_model(image_path)
 
     # Save a visualization of the predictions
-    if len(output.json_data["boxes"]) > 0:
-        print(f"Saving annotated image: {image_path}")
-        output.plot(
-            outpath=f"{os.path.dirname(image_path)}/flatbug/flatbug_{os.path.basename(image_path)}"
-        )
+    # if len(output.json_data["boxes"]) > 0:
+    #     print(f"Saving annotated image: {image_path}")
+    #     output.plot(
+    #         outpath=f"{os.path.dirname(image_path)}/flatbug/flatbug_{os.path.basename(image_path)}"
+    #     )
 
     # rename the confs item as scores
     crop_info = output.json_data
@@ -145,15 +145,20 @@ def perform_inf(
     )
 
     # extract the datetime from the image path
-    image_dt = os.path.basename(image_path).split("-")[0]
+    image_dt = os.path.basename(image_path)
+
+    if image_dt.startswith("20"):
+        image_dt = image_dt.split("-")[0]
+    else:
+        image_dt = image_dt.split("-")[1]
     image_dt = datetime.strptime(image_dt, "%Y%m%d%H%M%S%f")
     image_dt = datetime.strftime(image_dt, "%Y-%m-%d %H:%M:%S")
 
     current_dt = datetime.now()
     current_dt = datetime.strftime(current_dt, "%Y-%m-%d %H:%M:%S")
 
-    if not os.path.exists(f"{os.path.dirname(image_path)}/flatbug/"):
-        os.makedirs(f"{os.path.dirname(image_path)}/flatbug/")
+    # if not os.path.exists(f"{os.path.dirname(image_path)}/flatbug/"):
+    #     os.makedirs(f"{os.path.dirname(image_path)}/flatbug/")
 
     try:
         image = Image.open(image_path).convert("RGB")
@@ -184,8 +189,6 @@ def perform_inf(
 
     skipped = []
 
-    print(flatbug_outputs["scores"])
-
     # catch no crops: if no boxes or all boxes below threshold
     if len(flatbug_outputs["boxes"]) == 0 or all(
         [score < box_threshold for score in flatbug_outputs["scores"]]
@@ -195,7 +198,7 @@ def perform_inf(
     # for each detection
     for i in range(len(flatbug_outputs["boxes"])):
         crop_status = "crop " + str(i)
-        print(crop_status)
+
         x_min, y_min, x_max, y_max = flatbug_outputs["boxes"][i]
 
         box_score = flatbug_outputs["scores"][i]
@@ -205,7 +208,6 @@ def perform_inf(
         y_min = int(int(y_min) * original_height / 300)
         x_max = int(int(x_max) * original_width / 300)
         y_max = int(int(y_max) * original_height / 300)
-        print(x_min, y_min, x_max, y_max)
 
         if box_score < box_threshold:
             continue
