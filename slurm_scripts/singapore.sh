@@ -1,14 +1,14 @@
 #!/bin/bash
 
-#SBATCH --job-name=singapore
-#SBATCH --output=./logs/singapore.out
-#SBATCH --time=01:00:00
-#SBATCH --ntasks=1
-#SBATCH --cpus-per-task=1
-#SBATCH --mem=4G
-#SBATCH --gres=gpu:1
-#SBATCH --partition=orchid
-#SBATCH --account=orchid
+# SBATCH --job-name=singapore
+# SBATCH --output=./logs/singapore.out
+# SBATCH --time=00:10:00
+# SBATCH --ntasks=1
+# SBATCH --cpus-per-task=1
+# SBATCH --mem=4G
+# SBATCH --gres=gpu:1
+# SBATCH --partition=orchid
+# SBATCH --account=orchid
 
 source ~/miniforge3/bin/activate
 conda activate "~/conda_envs/flatbug/"
@@ -23,10 +23,13 @@ credentials_file="./credentials.json"
 # get all json files in the directory
 all_json_files=(${json_directory}/dep*_workload_chunks.json)
 
-# remove the ones containing dep000045, 46, 51 (already run)
-all_json_files=(${all_json_files[@]//*dep000045*/})
-all_json_files=(${all_json_files[@]//*dep000046*/})
-all_json_files=(${all_json_files[@]//*dep000051*/})
+# # remove the ones containing dep000045, 46, 51 (already run)
+# all_json_files=(${all_json_files[@]//*dep000045*/})
+# all_json_files=(${all_json_files[@]//*dep000046*/})
+# all_json_files=(${all_json_files[@]//*dep000051*/})
+
+# subset to only those containing dep000045, 56, 51
+all_json_files=($(printf '%s\n' "${all_json_files[@]}" |sed -E '/dep000045|dep000046|dep000051/!d'))
 
 echo "Processing ${#all_json_files[@]} files"
 
@@ -60,14 +63,14 @@ except Exception as e:
     continue
   fi
 
-  for chunk_id in $(seq 1 "$num_chunks"); do
+  for chunk_id in $(seq 1 3); do #"$num_chunks"); do
     echo "Submitting job for chunk $chunk_id of deployment $deployment_id"
 
     sbatch <<EOF
 #!/bin/bash
 #SBATCH --job-name=chunk_${deployment_id}_${chunk_id}
 #SBATCH --output=./logs/singapore/${deployment_id}_chunk_${chunk_id}.out
-#SBATCH --time=04:00:00
+#SBATCH --time=00:10:00
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=1
 #SBATCH --mem=8G
