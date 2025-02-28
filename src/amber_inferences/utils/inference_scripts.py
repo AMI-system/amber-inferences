@@ -21,16 +21,21 @@ transfer_config = TransferConfig(
     io_chunksize=262144,  # 256KB
 )
 
-def get_boxes(localisation_model, image, image_path, original_width, original_height, proc_device):
-    if type(localisation_model).__name__ == 'FasterRCNN':
+
+def get_boxes(
+    localisation_model, image, image_path, original_width, original_height, proc_device
+):
+    if type(localisation_model).__name__ == "FasterRCNN":
         # Standard localisation model
         transform_loc = transforms.Compose(
-                [
-                    transforms.Resize((300, 300)),
-                    transforms.ToTensor(),
-                    transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-                ]
-            )
+            [
+                transforms.Resize((300, 300)),
+                transforms.ToTensor(),
+                transforms.Normalize(
+                    mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]
+                ),
+            ]
+        )
         input_tensor = transform_loc(image).unsqueeze(0).to(proc_device)
         with torch.no_grad():
             localisation_outputs = localisation_model(input_tensor)
@@ -53,6 +58,7 @@ def get_boxes(localisation_model, image, image_path, original_width, original_he
         box_coords = localisation_outputs["boxes"]
 
     return [localisation_outputs, box_coords]
+
 
 def flatbug(image_path, flatbug_model):
     output = flatbug_model(image_path)
@@ -222,8 +228,15 @@ def perform_inf(
     original_image = image.copy()
     original_width, original_height = image.size
 
-    print('Inference for the localisation model...')
-    localisation_outputs, box_coords = get_boxes(localisation_model, image, image_path, original_width, original_height, proc_device)
+    print("Inference for the localisation model...")
+    localisation_outputs, box_coords = get_boxes(
+        localisation_model,
+        image,
+        image_path,
+        original_width,
+        original_height,
+        proc_device,
+    )
 
     skipped = []
 
@@ -389,6 +402,7 @@ def download_and_analyse(
 
         # Perform image analysis if enabled
         print(f"Analysing {local_path}")
+
         if perform_inference:
             perform_inf(
                 local_path,
@@ -409,4 +423,3 @@ def download_and_analyse(
         # Remove the image if cleanup is enabled
         if remove_image:
             os.remove(local_path)
-

@@ -5,7 +5,7 @@ from math import ceil
 import boto3
 
 
-def list_s3_keys(bucket_name, deployment_id=""):
+def list_s3_keys(bucket_name, deployment_id="", credentials_file="credentials.json"):
     """
     List all keys in an S3 bucket under a specific prefix.
 
@@ -16,7 +16,7 @@ def list_s3_keys(bucket_name, deployment_id=""):
     Returns:
         list: A list of S3 object keys.
     """
-    with open("./credentials.json", encoding="utf-8") as config_file:
+    with open(credentials_file, encoding="utf-8") as config_file:
         aws_credentials = json.load(config_file)
 
     session = boto3.Session(

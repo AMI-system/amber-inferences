@@ -32,10 +32,11 @@ AMBER team members can find these files on [OneDrive](https://thealanturininstit
 
 There are several object detection models which can be used in this analysis. These have varying recommended confidence thresholds to define object bounding boxes. The box threshold can be altered using the `--box_threshold` argument in `04_process_chunks.py`. The table below outlines the recommended thresholds for some models:
 
-| Model file name                                   | Recommended box threshold |
-|---------------------------------------------------|---------------------------|
-| v1_localizmodel_2021-08-17-12-06.pt **(Default)** | 0.99 **(Default)**        |
-| fasterrcnn_resnet50_fpn_tz53qv9v.pt               | 0.8                       |
+| Model file name                      | Recommended box threshold |
+|--------------------------------------|---------------------------|
+| v1_localizmodel_2021-08-17-12-06.pt  | 0.99         |
+| fasterrcnn_resnet50_fpn_tz53qv9v.pt  | 0.8          |
+| flat_bug_M.pt                        | 0.0          |
 
 
 ## Conda Environment and Installation
@@ -101,66 +102,10 @@ The multi-core pipeline is run in several steps:
 3. Chop the keys into chunks
 4. Analyse the chunks
 
-### 01. Listing Available Deployments
-
-To find information about the available deployments you can use the print_deployments function. For all deployments:
-
-```bash
-python 01_print_deployments.py --include_inactive
-```
-
-or for the UK only:
-
-```bash
-python 01_print_deployments.py \
-  --subset_countries 'United Kingdom'
-```
-
-### 02. Generating the Keys
-
-```bash
-python 02_generate_keys.py --bucket 'gbr' --deployment_id 'dep000072' --output_file './keys/solar/dep000072_keys.txt'
-```
-
-### 03. Pre-chop the Keys into Chunks
-
-```bash
-python 03_pre_chop_files.py --input_file './keys/solar/dep000072_keys.txt' --file_extensions 'jpg' 'jpeg' --chunk_size 100 --output_file './keys/solar/dep000072_workload_chunks.json'
-```
-
-### 04. Process the Chunked Files
-
-For a single chunk:
-
-```bash
-python 04_process_chunks.py \
-  --chunk_id 10 \
-  --json_file './keys/solar/dep000072_workload_chunks.json' \
-  --output_dir './data/flatbug2/dep000072' \
-  --bucket_name 'gbr' \
-  --credentials_file './credentials.json' \
-  --csv_file 'dep000072.csv' \
-  --species_model_path ./models/turing-uk_v03_resnet50_2024-05-13-10-03_state.pt \
-  --species_labels ./models/03_uk_data_category_map.json \
-  --perform_inference \
-  --remove_image \
-  --save_crops
-```
-
-### 05. Combine Chunk Outputs (Optional)
-
-If running using slurm, we typically write each chunk to an individual csv so ensure the do not overwrite one another. To combine into one file, run:
-
-```bash
-python 05_combine_outputs.py \
-  --csv_file_pattern "./data/solar/gbr/dep000072_*.csv" \
-  --main_csv_file "./data/solar/gbr/dep000072.csv" \
-  --remove_chunk_files
-```
 
 ## Running with slurm
 
-To run with slurm you need to be logged in on the [scientific nodes](https://help.jasmin.ac.uk/docs/interactive-computing/sci-servers/).
+To run with slurm on JASMIN you need to be logged in on the [scientific nodes](https://help.jasmin.ac.uk/docs/interactive-computing/sci-servers/).
 
 It is recommended you set up a shell script to runfor your country and deployment of interest. For example, `solar_field_analysis.sh` peformes inferences for the UK's Solar 1 panels deployment. You can run this using:
 
@@ -173,12 +118,14 @@ Note to run slurm you will need to install miniforge on the scientific nodes.
 To check the slurm queue:
 
 ```bash
-squeue -u USERNAME
+squeue -u $USER
 ```
 
 ## Running on Orchid
 
-Install the correct torch for the drivers:
+To run the flatbug model it is highly recommended that you use GPUs on orchid.
+
+To get set up on orchid, first find the driver versions:
 
 ```bash
 nvidia-smi
@@ -188,6 +135,16 @@ Then [find the correct torch command](https://pytorch.org/get-started/locally/) 
 
 ```bash
 conda install pytorch torchvision torchaudio pytorch-cuda=12.4 -c pytorch -c nvidia
+```
+
+Create an environment:
+
+```bash
+source ~/miniforge3/bin/activate
+conda activate "~/conda_envs/flatbug/"
+
+cd amber-inferences
+pip install -e .
 ```
 
 Install other requirements:
@@ -208,30 +165,18 @@ To run:
 source ~/miniforge3/bin/activate
 conda activate "~/conda_envs/flatbug"
 
-sbatch ./slurm_scripts/flatbug_test.sh
+#TODO: provide updated example script
+# sbatch ./slurm_scripts/flatbug_test.sh
 ```
-
-
-# Package Version
-
-## Set up and install
-
-```
-conda create -p "~/amber/" python=3.9
-conda activate "~/amber/"
-```
-
-Deployment summary
-
-```
-pip install -e .
-```
-
-Install flat-bug
 
 ## Running
 
+Once everything is installed you can run the inference pipeline. The following commands are available:
+
+
 ### Printing the Deployments Available
+
+This will print the deployments, and files, available in the object store:
 
 ```sh
 python -m amber_inferences.cli.deployments --subset_countries 'Panama'
@@ -240,6 +185,8 @@ amber-deployments --subset_countries 'Panama'
 ```
 
 ### Generating keys for inference
+
+This will split the keys into chunks for inference:
 
 ```sh
 python -m amber_inferences.cli.generate_keys --bucket 'pan' --deployment_id 'dep000022' --output_file './keys/dep000022_keys.json'
@@ -252,13 +199,7 @@ amber-keys --bucket 'sgp' --deployment_id 'dep000050' --output_file './keys/dep0
 ```
 
 
-```sh
-python amber_inferences.generate_keys --input_file './keys/solar/dep000072_keys.txt' --file_extensions 'jpg' 'jpeg' --chunk_size 100 --output_file './keys/dep000072_workload_chunks.json'
-
-# or
-
-amber-keys --bucket 'gbr' --deployment_id 'dep000072' --output_file './keys/dep000072_keys.txt'
-```
+### Perform Inferences
 
 ```sh
 python3 amber_inferences.cli.perform_inferences \
@@ -274,5 +215,3 @@ python3 amber_inferences.cli.perform_inferences \
   --remove_image \
   --save_crops
 ```
-
-# For Developers
