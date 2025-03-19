@@ -41,8 +41,6 @@ def main(
         write_mode = "w"
         write_header = True
 
-    print(glued_data.columns)
-
     if remove_empty_rows:
         glued_data = glued_data.loc[glued_data["crop_status"] != "IMAGE CORRUPT",]
         glued_data = glued_data.loc[

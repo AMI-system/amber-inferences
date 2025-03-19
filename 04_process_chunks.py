@@ -272,12 +272,12 @@ if __name__ == "__main__":
 
     models = load_models(
         device,
-        args.flatbug_model_path,
         args.binary_model_path,
         args.order_model_path,
         args.order_thresholds_path,
         args.species_model_path,
         args.species_labels,
+        args.flatbug_model_path,
     )
 
     main(

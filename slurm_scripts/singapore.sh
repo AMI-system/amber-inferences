@@ -1,15 +1,5 @@
 #!/bin/bash
 
-# SBATCH --job-name=singapore
-# SBATCH --output=./logs/singapore.out
-# SBATCH --time=00:10:00
-# SBATCH --ntasks=1
-# SBATCH --cpus-per-task=1
-# SBATCH --mem=4G
-# SBATCH --gres=gpu:1
-# SBATCH --partition=orchid
-# SBATCH --account=orchid
-
 source ~/miniforge3/bin/activate
 conda activate "~/conda_envs/flatbug/"
 
@@ -29,7 +19,7 @@ all_json_files=(${json_directory}/dep*_workload_chunks.json)
 # all_json_files=(${all_json_files[@]//*dep000051*/})
 
 # subset to only those containing dep000045, 56, 51
-all_json_files=($(printf '%s\n' "${all_json_files[@]}" |sed -E '/dep000045|dep000046|dep000051/!d'))
+all_json_files=($(printf '%s\n' "${all_json_files[@]}" |sed -E '/dep000045/!d'))
 
 echo "Processing ${#all_json_files[@]} files"
 
@@ -44,6 +34,8 @@ for json_file in "${all_json_files[@]}"; do
 
   deployment_id=$(basename "$json_file" | sed 's/_workload_chunks.json//')
   echo "Deployment ID: $deployment_id"
+
+  mkdir -p ${output_base_dir}/${deployment_id}
 
   num_chunks=$(python3 -c "
 import json
@@ -63,43 +55,24 @@ except Exception as e:
     continue
   fi
 
-  for chunk_id in $(seq 1 3); do #"$num_chunks"); do
-    echo "Submitting job for chunk $chunk_id of deployment $deployment_id"
+  sbatch --job-name="$deployment_id" \
+        --gres gpu:1 \
+        --partition orchid \
+        --account orchid \
+        --mem 8G \
+        --array=1-$num_chunks \
+        --export=ALL,json_file="$json_file",output_base_dir="$output_base_dir",deployment_id="$deployment_id",region="$region",credentials_file="$credentials_file" \
+        ./slurm_scripts/singapore_sbatch.sh
 
-    sbatch <<EOF
-#!/bin/bash
-#SBATCH --job-name=chunk_${deployment_id}_${chunk_id}
-#SBATCH --output=./logs/singapore/${deployment_id}_chunk_${chunk_id}.out
-#SBATCH --time=00:10:00
-#SBATCH --ntasks=1
-#SBATCH --cpus-per-task=1
-#SBATCH --mem=8G
-#SBATCH --gres=gpu:1
-#SBATCH --partition=orchid
-#SBATCH --account=orchid
+  # if [ $? -ne 0 ]; then
+  #   echo "Error submitting job for chunk $SLURM_ARRAY_TASK_ID of deployment $deployment_id"
+  #   exit 1
+  # fi
 
-source ~/miniforge3/bin/activate
-conda activate "~/conda_envs/flatbug/"
+  # python 05_combine_outputs.py \
+  #   --csv_file_pattern "${output_base_dir}/${deployment_id}/${deployment_id}_*.csv" \
+  #   --main_csv_file "${output_base_dir}/${deployment_id}_cleaned.csv" \
+  #   --remove_empty_rows
 
-mkdir ${output_base_dir}/${deployment_id}
 
-python 04_process_chunks.py \
-  --chunk_id $chunk_id \
-  --json_file "${json_file}" \
-  --output_dir "${output_base_dir}" \
-  --bucket_name $region \
-  --credentials_file "$credentials_file" \
-  --csv_file '${output_base_dir}/${deployment_id}/${deployment_id}_${chunk_id}.csv' \
-  --species_model_path ./models/turing-singapore_v02_resnet50_2024-11-21-19-58_state.pt \
-  --species_labels ./models/02_singapore_data_category_map.json \
-  --perform_inference \
-  --remove_image \
-  --box_threshold 0.01
-EOF
-
-    if [ $? -ne 0 ]; then
-      echo "Error submitting job for chunk $chunk_id of deployment $deployment_id"
-      exit 1
-    fi
-  done
 done
