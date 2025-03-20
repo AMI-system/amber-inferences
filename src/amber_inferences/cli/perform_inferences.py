@@ -3,12 +3,11 @@
 import argparse
 import json
 import os
-
-import boto3
 import torch
 
 from amber_inferences.utils.custom_models import load_models
 from amber_inferences.utils.inference_scripts import download_and_analyse, initialise_session
+
 
 def main(
     chunk_id,

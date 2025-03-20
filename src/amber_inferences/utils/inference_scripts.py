@@ -334,6 +334,41 @@ def localisation_only(
         if remove_image:
             os.remove(local_path)
 
+def binary_only(
+    image_path,
+    binary_model,
+    proc_device
+):
+    """
+    Perform binary classification: moth or non-moth
+    """
+
+    transform_species = transforms.Compose(
+        [
+            transforms.Resize((300, 300)),
+            transforms.ToTensor(),
+            transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5]),
+        ]
+    )
+
+    current_dt = datetime.now()
+    current_dt = datetime.strftime(current_dt, "%Y-%m-%d %H:%M:%S")
+
+    try:
+        # check if image_path viable
+        if not os.path.exists(image_path):
+            raise FileNotFoundError(f"Image file not found: {image_path}")
+        image_path = os.path.abspath(image_path)
+        image = Image.open(image_path).convert("RGB")
+    except Exception as e:
+        print(f"Error opening image {image_path}: {e}")
+
+    # Crop the detected region and perform classification
+    cropped_tensor = transform_species(image_path).unsqueeze(0).to(proc_device)
+
+    class_name, class_confidence = classify_box(cropped_tensor, binary_model)
+    return([class_name, class_confidence, current_dt])
+
 
 
 def perform_inf(
