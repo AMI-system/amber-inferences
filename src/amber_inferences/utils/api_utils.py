@@ -3,6 +3,10 @@ from requests.auth import HTTPBasicAuth
 import sys
 import boto3
 
+def get_buckets(s3_client):
+    """Get a list of all S3 buckets."""
+    response = s3_client.list_buckets()
+    return [bucket["Name"] for bucket in response["Buckets"]]
 
 def get_deployments(username, password):
     """Fetch deployments from the API with authentication."""
@@ -27,16 +31,41 @@ def count_files(s3_client, bucket_name, prefix):
     paginator = s3_client.get_paginator("list_objects_v2")
     operation_parameters = {"Bucket": bucket_name, "Prefix": prefix}
     page_iterator = paginator.paginate(**operation_parameters)
-    count = 0
+    image_count = 0
+    audio_count = 0
+    other_count = 0
+    other_file_types = []
     for page in page_iterator:
-        count += page.get("KeyCount", 0)
-    return count
+        # count += page.get("KeyCount", 0)
 
-def print_deployments(
+        # count files by type
+        for obj in page.get("Contents", []):
+            if obj["Key"].endswith(".jpg"):
+                image_count += 1
+            elif obj["Key"].endswith(".wav"):
+                audio_count += 1
+            else:
+                other_count += 1
+                file_type = obj["Key"].split('.')[-1]
+                if file_type not in other_file_types:
+                    other_file_types.append(file_type)
+
+
+    return {
+        'image_count': image_count,
+        'audio_count': audio_count,
+        'other_count': other_count,
+        'other_file_types': other_file_types
+    }
+
+
+def deployments_summary(
     aws_credentials,
     include_inactive=False,
     subset_countries=None,
-    print_image_count=True
+    subset_deployments=None,
+    summary_subdir="snapshot_images",
+    include_image_count=True
 ):
     """Print information about deployments from the API."""
     # Setup boto3 session
@@ -71,16 +100,24 @@ def print_deployments(
         country_code = list(set([x["country_code"] for x in country_depl]))[0]
         total_images = 0
 
+        deployment_summary = {}
+
+        if subset_deployments:
+            country_depl = [x for x in country_depl if x['deployment_id'] in subset_deployments]
+
         for dep_info in country_depl:
-            print(f"Deployment ID: {dep_info['deployment_id']} - Location: {dep_info['location_name']}")
-            prefix = f"{dep_info['deployment_id']}/snapshot_images"
+            prefix = f"{dep_info['deployment_id']}/{summary_subdir}/"
             bucket_name = dep_info["country_code"].lower()
 
-            if print_image_count:
-                count = count_files(s3_client, bucket_name, prefix)
-                total_images += count
-                print(f" - This deployment has {count} images.")
+            if include_image_count:
+                print(f'Counting files in {dep_info["deployment_id"]}...')
+                counts = count_files(s3_client, bucket_name, prefix)
+                dep_info['file_types'] = counts
 
-        if print_image_count:
-            print(f"{country} has {total_images} images in total.")
+            deployment_summary[dep_info['deployment_id']] = dep_info
+
+        return deployment_summary
+
+
+
 
