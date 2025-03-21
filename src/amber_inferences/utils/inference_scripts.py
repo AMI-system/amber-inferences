@@ -139,6 +139,7 @@ def crop_image_only(
     save_crops,
     box_threshold=0.995,
     job_name=None,
+    crop_dir=None
 ):
     transform_species = transforms.Compose(
         [
@@ -165,7 +166,9 @@ def crop_image_only(
     ]
 
     # extract the datetime from the image path
-    image_dt = os.path.basename(image_path).split("-")[0]
+    # take whichever split starts with 202
+    image_dt = os.path.basename(image_path).split("-")
+    image_dt = [x for x in image_dt if x.startswith("202")][0]
     image_dt = datetime.strptime(image_dt, "%Y%m%d%H%M%S%f")
     image_dt = datetime.strftime(image_dt, "%Y-%m-%d %H:%M:%S")
 
@@ -220,45 +223,45 @@ def crop_image_only(
         box_label = localisation_outputs["labels"][i]
 
         if box_score < box_threshold:
-            continue
+            # Crop the detected region and perform classification
+            cropped_image = original_image.crop((x_min, y_min, x_max, y_max))
 
-        # Crop the detected region and perform classification
-        cropped_image = original_image.crop((x_min, y_min, x_max, y_max))
+            # if save_crops then save the cropped image
+            crop_path = ""
+            if save_crops and i > 0:
+                crop_path = os.path.join(crop_dir, os.path.basename(image_path.replace(".jpg", f"_crop{i}.jpg")))
+                cropped_image.save(crop_path)
 
-        # if save_crops then save the cropped image
-        crop_path = ""
-        if save_crops and i > 0:
-            crop_path = image_path.replace(".jpg", f"_crop{i}.jpg").replace("snapshots", "crops")
-            cropped_image.save(crop_path)
-
-        # append to csv with pandas
-        df = pd.DataFrame(
-            [
+            # append to csv with pandas
+            df = pd.DataFrame(
                 [
-                    image_path,
-                    image_dt,
-                    bucket_name,
-                    current_dt,
-                    job_name,
-                    crop_status,
-                    box_score,
-                    box_label,
-                    x_min,
-                    y_min,
-                    x_max,
-                    y_max,
-                    crop_path,
-                ]
-            ],
-            columns=all_cols,
-        )
+                    [
+                        image_path,
+                        image_dt,
+                        bucket_name,
+                        current_dt,
+                        job_name,
+                        crop_status,
+                        box_score,
+                        box_label,
+                        x_min,
+                        y_min,
+                        x_max,
+                        y_max,
+                        crop_path,
+                    ]
+                ],
+                columns=all_cols,
+            )
 
-        df.to_csv(
-            f"{csv_file}",
-            mode="a",
-            header=not os.path.isfile(csv_file),
-            index=False,
-        )
+            df.to_csv(
+                f"{csv_file}",
+                mode="a",
+                header=not os.path.isfile(csv_file),
+                index=False,
+            )
+        else:
+            skipped = skipped + [True]
 
     # catch images where no detection or all considered too large/not confident enough
     if all(skipped):
@@ -282,6 +285,8 @@ def crop_image_only(
             header=not os.path.isfile(csv_file),
             index=False,
         )
+
+    return df
 
 def localisation_only(
     keys,
@@ -587,6 +592,23 @@ def initialise_session(credentials_file="credentials.json"):
     client = session.client("s3", endpoint_url=aws_credentials["AWS_URL_ENDPOINT"])
     return client
 
+def download_image_from_key(s3_client, key, bucket, output_dir):
+    """
+    Download an image from an S3 bucket using a key.
+
+    Args:
+        s3_client (boto3.Client): Initialised S3 client.
+        key (str): S3 key to download.
+        bucket (str): S3 bucket name.
+        deployment_id (str): ID of the deployment.
+
+    Returns:
+        str: Local path to the downloaded image.
+    """
+    local_path = f"{output_dir}/{os.path.basename(key)}"
+    os.makedirs(os.path.dirname(local_path), exist_ok=True)
+    s3_client.download_file(bucket, key, local_path)
+
 
 def download_and_analyse(
     keys,
@@ -619,12 +641,14 @@ def download_and_analyse(
         Other args: Parameters for inference and analysis.
     """
     # Ensure output directory exists
-    os.makedirs(output_dir, exist_ok=True)
+    # os.makedirs(output_dir, exist_ok=True)
 
     for key in keys:
-        local_path = os.path.join(output_dir, os.path.basename(key))
-        print(f"Downloading {key} to {local_path}")
-        client.download_file(bucket_name, key, local_path, Config=transfer_config)
+        download_image_from_key(client, key, bucket_name, transfer_config, output_dir)
+
+        # local_path = os.path.join(output_dir, os.path.basename(key))
+        # print(f"Downloading {key} to {local_path}")
+        # client.download_file(bucket_name, key, local_path, Config=transfer_config)
 
         # Perform image analysis if enabled
         print(f"Analysing {local_path}")

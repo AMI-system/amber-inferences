@@ -41,24 +41,31 @@ def list_s3_keys(s3_client, bucket_name, deployment_id="", subdir=None):
         else:
             break
 
+    # remove corrupt/hidden keys
+    keys = [x for x in keys if not os.path.basename(x).startswith("$")]
+    keys = [x for x in keys if not os.path.basename(x).startswith(".")]
+    keys = [x for x in keys if "recycle" not in x]
+
     return keys
 
 
 def save_keys(s3_client, bucket, deployment_id, output_file, subdir="snapshot_images"):
     """
-    Save S3 keys to a file, one per line.
+    Save S3 keys to a JSON file.
 
     Parameters:
-        keys (list): List of S3 keys.
-        output_file (str): Path to the output file.
+        s3_client: Boto3 S3 client.
+        bucket (str): Name of the S3 bucket.
+        deployment_id (str): Deployment ID for filtering keys.
+        output_file (str): Path to the output JSON file.
+        subdir (str): Subdirectory to filter keys (default: "snapshot_images").
     """
     os.makedirs(os.path.dirname(output_file) or os.getcwd(), exist_ok=True)
 
     keys=list_s3_keys(s3_client, bucket, deployment_id, subdir)
 
-    with open(output_file, "w") as f:
-        for key in keys:
-            f.write(key + "\n")
+    with open(output_file, "w", encoding="UTF-8") as f:
+        json.dump(keys, f, indent=4)
 
 
 def load_workload(input_file, file_extensions):

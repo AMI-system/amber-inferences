@@ -115,10 +115,20 @@ def load_models(
     if localisation_model_path is not None:
         try:
             localisation_model = load_loc_model(localisation_model_path, device)
+
         except Exception as e:
-            print(f"Failed to load localisation model with load_loc_model: {e}, trying flatbug")
-            from flat_bug.predictor import Predictor
-            localisation_model = Predictor(model=localisation_model_path, device=device, dtype="float16")
+            if str(e) == "Unpickling error":
+                print(f"Failed to load localisation model with load_loc_model: {e}, trying flatbug")
+                from flat_bug.predictor import Predictor
+                try:
+                    localisation_model = Predictor(model=localisation_model_path, device=device, dtype="float16")
+                except Exception as e:
+                    print(f"Failed to load localisation model with load_loc_model or flat_bug: {e}")
+                    localisation_model = None
+            else:
+                # print error message and escape
+                print(f"Failed to load localisation model with load_loc_model or flat_bug: {e}")
+                localisation_model = None
         model_dict['localisation_model'] = localisation_model
 
     # Load the binary model
@@ -164,3 +174,4 @@ def load_models(
         model_dict['species_model_labels'] = species_category_map
 
     return model_dict
+
