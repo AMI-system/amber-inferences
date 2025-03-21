@@ -5,7 +5,7 @@ from math import ceil
 import boto3
 
 
-def list_s3_keys(bucket_name, deployment_id=""):
+def list_s3_keys(s3_client, bucket_name, deployment_id="", subdir=None):
     """
     List all keys in an S3 bucket under a specific prefix.
 
@@ -16,16 +16,6 @@ def list_s3_keys(bucket_name, deployment_id=""):
     Returns:
         list: A list of S3 object keys.
     """
-    with open("./credentials.json", encoding="utf-8") as config_file:
-        aws_credentials = json.load(config_file)
-
-    session = boto3.Session(
-        aws_access_key_id=aws_credentials["AWS_ACCESS_KEY_ID"],
-        aws_secret_access_key=aws_credentials["AWS_SECRET_ACCESS_KEY"],
-        region_name=aws_credentials["AWS_REGION"],
-    )
-    s3_client = session.client("s3", endpoint_url=aws_credentials["AWS_URL_ENDPOINT"])
-
     keys = []
     continuation_token = None
 
@@ -34,6 +24,8 @@ def list_s3_keys(bucket_name, deployment_id=""):
             "Bucket": bucket_name,
             "Prefix": deployment_id,
         }
+        if subdir:
+            list_kwargs["Prefix"] = os.path.join(deployment_id, subdir)
         if continuation_token:
             list_kwargs["ContinuationToken"] = continuation_token
 
@@ -52,7 +44,7 @@ def list_s3_keys(bucket_name, deployment_id=""):
     return keys
 
 
-def save_keys_to_file(keys, output_file):
+def save_keys(s3_client, bucket, deployment_id, output_file, subdir="snapshot_images"):
     """
     Save S3 keys to a file, one per line.
 
@@ -61,6 +53,8 @@ def save_keys_to_file(keys, output_file):
         output_file (str): Path to the output file.
     """
     os.makedirs(os.path.dirname(output_file) or os.getcwd(), exist_ok=True)
+
+    keys=list_s3_keys(s3_client, bucket, deployment_id, subdir)
 
     with open(output_file, "w") as f:
         for key in keys:
