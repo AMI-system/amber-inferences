@@ -8,6 +8,7 @@ import boto3
 import torch
 import torchvision.transforms as transforms
 from PIL import Image
+import cv2
 from boto3.s3.transfer import TransferConfig
 
 # ignore the pandas Future Warning
@@ -110,6 +111,10 @@ def classify_order(image_tensor, order_model, order_labels, order_data_threshold
 
     return label, score
 
+def variance_of_laplacian(image):
+	# compute the Laplacian of the image and then return the focus
+	# measure, which is simply the variance of the Laplacian
+	return cv2.Laplacian(image, cv2.CV_64F).var()
 
 def classify_box(image_tensor, binary_model):
     """
@@ -155,6 +160,7 @@ def crop_image_only(
         "bucket_name",
         "analysis_datetime",
         "job_name",
+        "image_bluriness",
         "crop_status",
         "box_score",
         "box_label",
@@ -162,6 +168,8 @@ def crop_image_only(
         "y_min",
         "x_max",
         "y_max",  # localisation info
+        "crop_bluriness",
+        "crop_area",
         "cropped_image_path",
     ]
 
@@ -174,6 +182,8 @@ def crop_image_only(
 
     current_dt = datetime.now()
     current_dt = datetime.strftime(current_dt, "%Y-%m-%d %H:%M:%S")
+
+    crops_df = pd.DataFrame(columns=all_cols)
 
     try:
         # check if image_path viable
@@ -198,12 +208,15 @@ def crop_image_only(
             header=not os.path.isfile(csv_file),
             index=False,
         )
+        crops_df = pd.concat([crops_df, df])
         return  # Skip this image
+
+    image_bluriness = variance_of_laplacian(np.array(image))
+
 
     original_image = image.copy()
     original_width, original_height = image.size
 
-    print('Inference for the localisation model...')
     localisation_outputs, box_coords = get_boxes(localisation_model, image, image_path, original_width, original_height, proc_device)
 
     skipped = []
@@ -222,13 +235,16 @@ def crop_image_only(
         box_score = localisation_outputs["scores"][i]
         box_label = localisation_outputs["labels"][i]
 
-        if box_score < box_threshold:
+        crop_area = (x_max - x_min) * (y_max - y_min)
+
+        if float(box_score) >= box_threshold:
             # Crop the detected region and perform classification
             cropped_image = original_image.crop((x_min, y_min, x_max, y_max))
+            crop_bluriness = variance_of_laplacian(np.array(cropped_image))
 
             # if save_crops then save the cropped image
             crop_path = ""
-            if save_crops and i > 0:
+            if save_crops:
                 crop_path = os.path.join(crop_dir, os.path.basename(image_path.replace(".jpg", f"_crop{i}.jpg")))
                 cropped_image.save(crop_path)
 
@@ -241,6 +257,7 @@ def crop_image_only(
                         bucket_name,
                         current_dt,
                         job_name,
+                        image_bluriness,
                         crop_status,
                         box_score,
                         box_label,
@@ -248,6 +265,8 @@ def crop_image_only(
                         y_min,
                         x_max,
                         y_max,
+                        crop_bluriness,
+                        crop_area,
                         crop_path,
                     ]
                 ],
@@ -260,6 +279,8 @@ def crop_image_only(
                 header=not os.path.isfile(csv_file),
                 index=False,
             )
+            crops_df = pd.concat([crops_df, df])
+            skipped = skipped + [False]
         else:
             skipped = skipped + [True]
 
@@ -273,9 +294,10 @@ def crop_image_only(
                     bucket_name,
                     current_dt,
                     job_name,
+                    image_bluriness,
                     "NO DETECTIONS FOR IMAGE",
                 ]
-                + [""] * (len(all_cols) - 6),
+                + [""] * (len(all_cols) - 7),
             ],
             columns=all_cols,
         )
@@ -285,8 +307,9 @@ def crop_image_only(
             header=not os.path.isfile(csv_file),
             index=False,
         )
+        crops_df = pd.concat([crops_df, df])
 
-    return df
+    return crops_df
 
 def localisation_only(
     keys,
