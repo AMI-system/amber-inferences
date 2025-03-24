@@ -155,7 +155,7 @@ def load_models(
         )
         model_order = model_order.to(device)
         model_order.eval()
-        model_dict['order_model'] = order_model
+        model_dict['order_model'] = model_order
         model_dict['order_model_thresholds'] = order_data_thresholds
         model_dict['order_model_labels'] = order_labels
 
