@@ -3,14 +3,13 @@
 import argparse
 import json
 import os
+import random
+import boto3
 import torch
+import string
 
 from amber_inferences.utils.custom_models import load_models
-from amber_inferences.utils.inference_scripts import (
-    download_and_analyse,
-    initialise_session,
-)
-
+from amber_inferences.utils.inference_scripts import localisation_only, initialise_session
 
 def main(
     chunk_id,
@@ -23,15 +22,9 @@ def main(
     save_crops=False,
     localisation_model=None,
     box_threshold=0.99,
-    binary_model=None,
-    order_model=None,
-    order_labels=None,
-    species_model=None,
-    species_labels=None,
     device=None,
-    order_data_thresholds=None,
-    top_n=5,
     csv_file="results.csv",
+    job_name=None,
 ):
     """
     Main function to process a specific chunk of S3 keys.
@@ -52,7 +45,7 @@ def main(
     client = initialise_session(credentials_file)
 
     keys = chunks[chunk_id]["keys"]
-    download_and_analyse(
+    localisation_only(
         keys=keys,
         output_dir=output_dir,
         bucket_name=bucket_name,
@@ -62,15 +55,8 @@ def main(
         save_crops=save_crops,
         localisation_model=localisation_model,
         box_threshold=box_threshold,
-        binary_model=binary_model,
-        order_model=order_model,
-        order_labels=order_labels,
-        species_model=species_model,
-        species_labels=species_labels,
         device=device,
-        order_data_thresholds=order_data_thresholds,
-        top_n=top_n,
-        csv_file=csv_file,
+        csv_file=csv_file,job_name=job_name
     )
 
 
@@ -119,57 +105,23 @@ if __name__ == "__main__":
         default=0.99,
         help="Threshold for the confidence score of bounding boxes. Default: 0.99",
     )
-    # TODO: option not to run binary/species
-    parser.add_argument(
-        "--binary_model_path",
-        type=str,
-        help="Path to the binary model weights.",
-        default="./models/moth-nonmoth-effv2b3_20220506_061527_30.pth",
-    )
-    parser.add_argument(
-        "--order_model_path",
-        type=str,
-        help="Path to the order model weights.",
-        default="./models/dhc_best_128.pth",
-    )
-    parser.add_argument(
-        "--order_labels", type=str, help="Path to the order labels file."
-    )
-    parser.add_argument(
-        "--species_model_path",
-        type=str,
-        help="Path to the species model weights.",
-        default="./models/turing-costarica_v03_resnet50_2024-06-04-16-17_state.pt",
-    )
-    parser.add_argument(
-        "--species_labels",
-        type=str,
-        help="Path to the species labels file.",
-        default="./models/03_costarica_data_category_map.json",
-    )
-    parser.add_argument(
-        "--device",
-        type=str,
-        default="cpu",
-        help="Device to run inference on (e.g., cpu or cuda).",
-    )
-    parser.add_argument(
-        "--order_thresholds_path",
-        type=str,
-        help="Path to the order data thresholds file.",
-        default="./models/thresholdsTestTrain.csv",
-    )
-    parser.add_argument(
-        "--top_n_species",
-        type=int,
-        help="The number of predictions to output.",
-        default=5,
-    )
     parser.add_argument(
         "--csv_file", default="results.csv", help="Path to save analysis results."
     )
+    parser.add_argument(
+        "--job_name", default=None, help="Unique job name. If none, one will be randomly generated"
+    )
 
     args = parser.parse_args()
+    job_name = args.job_name
+    if job_name is None:
+        # set as a random series of alphanumeric
+        job_name = ''.join(random.choice(f"{string.ascii_lowercase}{string.digits}") for i in range(16))
+    args.job_name = job_name
+
+    print(f'Saving job info to {args.output_dir}/{job_name}_job_info.json')
+    with open(f"{args.output_dir}/{job_name}_job_info.json", "w") as f:
+        json.dump(vars(args), f)
 
     if torch.cuda.is_available():
         device = torch.device("cuda:0")
@@ -185,29 +137,16 @@ if __name__ == "__main__":
         )
 
     # check if the model paths exist
-    for mod_path in [
-        args.localisation_model_path,
-        args.binary_model_path,
-        args.order_model_path,
-        args.order_thresholds_path,
-        args.species_model_path,
-        args.species_labels,
-    ]:
-
-        if not os.path.exists(os.path.abspath(mod_path)):
-            raise FileNotFoundError(f"Model path not found: {mod_path}")
+    if not os.path.exists(os.path.abspath(args.localisation_model_path)):
+        raise FileNotFoundError(f"Model path not found: {args.localisation_model_path}")
 
     if not os.path.exists(os.path.abspath(args.json_file)):
-        raise FileNotFoundError(f"JSON file not found: {args.json_file}")
+            raise FileNotFoundError(f"JSON file not found: {args.json_file}")
+
 
     models = load_models(
         device,
-        os.path.abspath(args.localisation_model_path),
-        os.path.abspath(args.binary_model_path),
-        os.path.abspath(args.order_model_path),
-        os.path.abspath(args.order_thresholds_path),
-        os.path.abspath(args.species_model_path),
-        os.path.abspath(args.species_labels),
+        localisation_model_path=os.path.abspath(args.localisation_model_path)
     )
 
     main(
@@ -221,13 +160,7 @@ if __name__ == "__main__":
         perform_inference=args.perform_inference,
         localisation_model=models["localisation_model"],
         box_threshold=args.box_threshold,
-        binary_model=models["classification_model"],
-        order_model=models["order_model"],
-        order_labels=models["order_model_labels"],
-        order_data_thresholds=models["order_model_thresholds"],
-        species_model=models["species_model"],
-        species_labels=models["species_model_labels"],
         device=device,
-        top_n=args.top_n_species,
         csv_file=args.csv_file,
+        job_name=job_name
     )

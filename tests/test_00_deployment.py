@@ -3,15 +3,15 @@ import sys
 import unittest
 from unittest.mock import patch, MagicMock
 from amber_inferences.utils.config import load_credentials
-from amber_inferences.deployments import print_deployments, count_files
+from amber_inferences.cli.deployments import print_deployments, count_files
 
 class TestPrintDeployments(unittest.TestCase):
     def setUp(self):
         self.aws_credentials = load_credentials("./credentials.json")
 
-    @patch("amber_inferences.deployments.boto3.Session")
-    @patch("amber_inferences.deployments.get_deployments")
-    @patch("amber_inferences.deployments.count_files")
+    @patch("amber_inferences.cli.deployments.boto3.Session")
+    @patch("amber_inferences.cli.deployments.get_deployments")
+    @patch("amber_inferences.cli.deployments.count_files")
     def test_print_deployments_active_only(self, mock_count_files, mock_get_deployments, mock_boto_session):
         # Mock get_deployments to return both active and inactive deployments
 

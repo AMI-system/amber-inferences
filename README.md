@@ -169,6 +169,24 @@ conda activate "~/conda_envs/flatbug"
 # sbatch ./slurm_scripts/flatbug_test.sh
 ```
 
+
+# Package Version
+
+## Set up and install
+
+```
+conda create -p "~/amber/" python=3.9
+conda activate "~/amber/"
+```
+
+Deployment summary
+
+```sh
+pip install -e .
+```
+
+Install flat-bug
+
 ## Running
 
 Once everything is installed you can run the inference pipeline. The following commands are available:
@@ -186,7 +204,7 @@ amber-deployments --subset_countries 'Panama'
 
 ### Generating keys for inference
 
-This will split the keys into chunks for inference:
+Panama example:
 
 ```sh
 python -m amber_inferences.cli.generate_keys --bucket 'pan' --deployment_id 'dep000022' --output_file './keys/dep000022_keys.json'
@@ -194,24 +212,57 @@ python -m amber_inferences.cli.generate_keys --bucket 'pan' --deployment_id 'dep
 # or
 
 amber-keys --bucket 'pan' --deployment_id 'dep000022' --output_file './keys/dep000022_keys.json' --file_extensions 'jpeg' 'jpg'
-
-amber-keys --bucket 'sgp' --deployment_id 'dep000050' --output_file './keys/dep000050_keys.json' --file_extensions 'jpeg' 'jpg'
 ```
 
-
-### Perform Inferences
+UK example:
 
 ```sh
-python3 amber_inferences.cli.perform_inferences \
-  --chunk_id 1 \
-  --json_file './examples/dep000072_subset.json' \
-  --output_dir './data/' \
-  --bucket_name 'gbr' \
-  --credentials_file './credentials.json' \
-  --csv_file 'dep000072.csv' \
-  --species_model_path ./models/turing-uk_v03_resnet50_2024-05-13-10-03_state.pt \
-  --species_labels ./models/03_uk_data_category_map.json \
+python -m amber_inferences.generate_keys --input_file './keys/solar/dep000072_keys.txt' --file_extensions 'jpg' 'jpeg' --chunk_size 100 --output_file './keys/dep000072_workload_chunks.json'
+
+# or
+
+amber-keys --bucket 'gbr' --deployment_id 'dep000072' --output_file './keys/dep000072_keys.txt'
+```
+
+### Performing the inferences
+
+```sh
+python3 -m amber_inferences.cli.perform_inferences \
+  --chunk_id 10 \
+  --json_file '../examples/dep000022_keys.json' \
+  --output_dir '../data/examples/dep000022' \
+  --bucket_name 'pan' \
+  --credentials_file '../credentials.json' \
+  --csv_file '../data/examples/dep000022.csv' \
+  --species_model_path ../models/turing-costarica_v03_resnet50_2024-06-04-16-17_state.pt \
+  --species_labels ../models/03_costarica_data_category_map.json \
+  --binary_model_path ../models/moth-nonmoth-effv2b3_20220506_061527_30.pth \
+  --localisation_model_path ../models/v1_localizmodel_2021-08-17-12-06.pt \
+  --order_model_path ../models/dhc_best_128.pth \
+  --order_thresholds_path ../models/thresholdsTestTrain.csv \
   --perform_inference \
-  --remove_image \
+  --box_threshold 0.99 \
   --save_crops
+
+
+
+  # or
+
+amber-inferences --chunk_id 1 \
+    --json_file './examples/dep000072_subset_keys.json' \
+    --output_dir './data/examples/' \
+    --bucket_name 'gbr' --credentials_file './credentials.json' \
+    --csv_file 'dep000072.csv' \
+    --species_model_path ./models/turing-uk_v03_resnet50_2024-05-13-10-03_state.pt \
+    --species_labels ./models/03_uk_data_category_map.json \
+    --perform_inference \
+    --remove_image \
+    --save_crops
+```
+
+# For Developers
+
+
+```sh
+python3 -m unittest discover -s tests
 ```
