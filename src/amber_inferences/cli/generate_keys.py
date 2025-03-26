@@ -1,14 +1,17 @@
 #!/usr/bin/env python3
 
 import argparse
-import os
+
+# import os
+# import boto3
+# from amber_inferences.utils.config import load_credentials
 
 from amber_inferences.utils.key_utils import (
     list_s3_keys,
-    load_workload,
-    save_chunks,
-    save_keys_to_file,
-    split_workload,
+    save_keys,
+    # load_workload,
+    # split_workload,
+    # save_chunks,
 )
 
 
@@ -38,17 +41,17 @@ def main():
         default="'jpg' 'jpeg'",
         help="File extensions to be included. If empty, all extensions used. Defauly = 'jpg' 'jpeg'",
     )
-    parser.add_argument(
-        "--subset_dates",
-        type=str,
-        nargs="+",
-        default=None,
-        help="Dates to subset the keys. If empty, all dates used. Default = None. Format: 'YYYY-MM-DD'",
-    )
-    parser.add_argument(
-        "--chunk_size", type=int, default=100, help="Number of keys per chunk."
-    )
     args = parser.parse_args()
+
+    # Load AWS credentials
+    # aws_credentials = load_credentials()
+    # Setup boto3 session
+    # session = boto3.Session(
+    #     aws_access_key_id=aws_credentials["AWS_ACCESS_KEY_ID"],
+    #     aws_secret_access_key=aws_credentials["AWS_SECRET_ACCESS_KEY"],
+    #     region_name=aws_credentials["AWS_REGION"],
+    # )
+    # s3_client = session.client("s3", endpoint_url=aws_credentials["AWS_URL_ENDPOINT"])
 
     # List keys from the specified S3 bucket and prefix
     print(
@@ -57,45 +60,39 @@ def main():
     keys = list_s3_keys(args.bucket, args.deployment_id)
 
     # Save keys to the output file
-    all_records_file = (
-        f"{os.path.dirname(args.output_file)}/"
-        f"{os.path.splitext(os.path.basename(args.output_file))[0]}"
-        "_all_keys"
-        f"{os.path.splitext(os.path.basename(args.output_file))[1]}"
-    )
-    save_keys_to_file(keys, all_records_file)
-    print(f"Saving all {len(keys)} keys/records to {all_records_file}")
+    print(f"Saving all {len(keys)} keys/records to {args.output_file}")
+    save_keys(args.bucket, args.deployment_id, args.output_file)
 
-    # Load the workload from the input file
-    keys = load_workload(all_records_file, args.file_extensions, args.subset_dates)
+    # # Load the workload from the input file
+    # keys = load_workload(all_records_file, args.file_extensions)
 
-    # Split the workload into chunks
-    chunks = split_workload(keys, args.chunk_size)
+    # # Split the workload into chunks
+    # chunks = split_workload(keys, args.chunk_size)
 
-    # Save the chunks to a JSON file
-    save_chunks(chunks, args.output_file)
+    # # Save the chunks to a JSON file
+    # save_chunks(chunks, args.output_file)
 
-    print(f"Successfully split {len(keys)} keys into {len(chunks)} chunks.")
-    print(f"Chunks saved to {args.output_file}")
+    # print(f"Successfully split {len(keys)} keys into {len(chunks)} chunks.")
+    # print(f"Chunks saved to {args.output_file}")
 
 
 if __name__ == "__main__":
     main()
 
-    parser = argparse.ArgumentParser(
-        description="Pre-chop S3 workload into manageable chunks."
-    )
-    parser.add_argument(
-        "--input_file",
-        type=str,
-        required=True,
-        help="Path to file containing S3 keys, one per line.",
-    )
+    # parser = argparse.ArgumentParser(
+    #     description="Save image files from S3 workload into file."
+    # )
+    # parser.add_argument(
+    #     "--input_file",
+    #     type=str,
+    #     required=True,
+    #     help="Path to file containing S3 keys, one per line.",
+    # )
 
-    parser.add_argument(
-        "--output_file",
-        type=str,
-        required=True,
-        help="Path to save the output JSON file.",
-    )
-    args = parser.parse_args()
+    # parser.add_argument(
+    #     "--output_file",
+    #     type=str,
+    #     required=True,
+    #     help="Path to save the output JSON file.",
+    # )
+    # args = parser.parse_args()

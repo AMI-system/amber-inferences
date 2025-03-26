@@ -1,4 +1,4 @@
-# Performing AMBER Inference on JASMIN
+# Performing AMBER Inference
 
 This directory is designed to download images from Jasmin object store and perform inference to:
 - detect objects
@@ -32,26 +32,14 @@ AMBER team members can find these files on [OneDrive](https://thealanturininstit
 
 There are several object detection models which can be used in this analysis. These have varying recommended confidence thresholds to define object bounding boxes. The box threshold can be altered using the `--box_threshold` argument in `04_process_chunks.py`. The table below outlines the recommended thresholds for some models:
 
-| Model file name                      | Recommended box threshold |
-|--------------------------------------|---------------------------|
-| v1_localizmodel_2021-08-17-12-06.pt  | 0.99         |
-| fasterrcnn_resnet50_fpn_tz53qv9v.pt  | 0.8          |
-| flat_bug_M.pt                        | 0.0          |
+| Model file name                                   | Recommended box threshold |
+|---------------------------------------------------|---------------------------|
+| v1_localizmodel_2021-08-17-12-06.pt **(Default)** | 0.99 **(Default)**        |
+| fasterrcnn_resnet50_fpn_tz53qv9v.pt               | 0.8                       |
+| flatbug_*.pt                                      | 0.0                       |
 
 
-## Conda Environment and Installation
 
-Once you have access to JASMIN, you will need to [install miniforge](https://help.jasmin.ac.uk/docs/software-on-jasmin/creating-and-using-miniforge-environments/) to run condat. Then create a conda environment and install packages:
-
-```bash
-CONDA_ENV_PATH="~/conda_envs/moth_detector_env/"
-source ~/miniforge3/bin/activate
-conda create -p "${CONDA_ENV_PATH}" python=3.9
-conda activate "${CONDA_ENV_PATH}"
-
-conda install pytorch torchvision torchaudio cpuonly -c pytorch
-conda install --yes --file requirements.txt
-```
 
 ## Configs
 
@@ -65,73 +53,37 @@ To use the inference scripts you will need to set up a `credentials.json` file c
   "AWS_URL_ENDPOINT": `SECRET`,
   "UKCEH_username": `SECRET`,
   "UKCEH_password": `SECRET`,
-  "directory": './inferences/data'
 }
 ```
 
 Contact [Katriona Goldmann](kgoldmann@turing.ac.uk) for the AWS Access and UKCEH API configs.
 
-## Usage
 
-Load the conda env on Jasmin:
+
+
+## Setting up the Environment
+
+Create a conda environment:
 
 ```bash
-source ~/miniforge3/bin/activate
-conda activate "~/conda_envs/flatbug/"
+conda create -p "~/amber/" python=3.9
+conda activate "~/amber/"
+```
 
-cd amber-inferences
+```sh
+conda install --yes --file requirements.txt
 pip install -e .
 ```
 
-<!-- _or on Baskerville_:
+## If using GPU
 
-```bash
-module load bask-apps/live
-module load CUDA/11.7.0
-module load Python/3.9.5-GCCcore-10.3.0
-module load Miniforge3/24.1.2-0
-eval "$(${EBROOTMINIFORGE3}/bin/conda shell.bash hook)"
-source "${EBROOTMINIFORGE3}/etc/profile.d/mamba.sh"
-mamba activate "/bask/projects/v/vjgo8416-amber/moth_detector_env"
-``` -->
-
-The multi-core pipeline is run in several steps:
-
-1. Listing All Available Deployments
-2. Generate Key Files
-3. Chop the keys into chunks
-4. Analyse the chunks
-
-
-## Running with slurm
-
-To run with slurm on JASMIN you need to be logged in on the [scientific nodes](https://help.jasmin.ac.uk/docs/interactive-computing/sci-servers/).
-
-It is recommended you set up a shell script to runfor your country and deployment of interest. For example, `solar_field_analysis.sh` peformes inferences for the UK's Solar 1 panels deployment. You can run this using:
-
-```bash
-sbatch solar_field_analysis.sh
-```
-
-Note to run slurm you will need to install miniforge on the scientific nodes.
-
-To check the slurm queue:
-
-```bash
-squeue -u $USER
-```
-
-## Running on Orchid
-
-To run the flatbug model it is highly recommended that you use GPUs on orchid.
-
-To get set up on orchid, first find the driver versions:
+You will need to use GPU to utilise Flatbug. To do this you will need to install the correct torch version for your CUDA version. Check the drivers:
 
 ```bash
 nvidia-smi
 ```
 
-Then [find the correct torch command](https://pytorch.org/get-started/locally/) for that CUDA version. For Cuda 12.4:
+Then [find the correct torch command](https://pytorch.org/get-started/locally/) for that CUDA version. For example, for Cuda 12.4:
 
 ```bash
 conda install pytorch torchvision torchaudio pytorch-cuda=12.4 -c pytorch -c nvidia
@@ -147,54 +99,31 @@ cd amber-inferences
 pip install -e .
 ```
 
-Install other requirements:
+## If installing Flatbug
+
 
 ```bash
-conda install --yes --file requirements.txt
-
-# install flatbug
+cd ../
 git clone git@github.com:darsa-group/flat-bug.git
 cd flat-bug
 git checkout develop
 pip install -e .
-```
-
-To run:
-
-```bash
-source ~/miniforge3/bin/activate
-conda activate "~/conda_envs/flatbug"
-
-#TODO: provide updated example script
-# sbatch ./slurm_scripts/flatbug_test.sh
+cd ../amber_inferences
 ```
 
 
-# Package Version
-
-## Set up and install
-
-```
-conda create -p "~/amber/" python=3.9
-conda activate "~/amber/"
-```
-
-Deployment summary
-
-```sh
-pip install -e .
-```
-
-Install flat-bug
 
 ## Running
 
 Once everything is installed you can run the inference pipeline. The following commands are available:
 
 
-### Printing the Deployments Available
+There is a tutorial set up in `./examples/tutorial.ipynb` which can be used to
+run and explore the pipeline. This is recommended for first time users.
 
-This will print the deployments, and files, available in the object store:
+### Running from command line
+
+#### Printing the Deployments Available
 
 ```sh
 python -m amber_inferences.cli.deployments --subset_countries 'Panama'
@@ -202,7 +131,7 @@ python -m amber_inferences.cli.deployments --subset_countries 'Panama'
 amber-deployments --subset_countries 'Panama'
 ```
 
-### Generating keys for inference
+#### Generating keys for inference
 
 Panama example:
 
@@ -224,7 +153,7 @@ python -m amber_inferences.generate_keys --input_file './keys/solar/dep000072_ke
 amber-keys --bucket 'gbr' --deployment_id 'dep000072' --output_file './keys/dep000072_keys.txt'
 ```
 
-### Performing the inferences
+#### Performing the inferences
 
 ```sh
 python3 -m amber_inferences.cli.perform_inferences \
@@ -259,6 +188,10 @@ amber-inferences --chunk_id 1 \
     --remove_image \
     --save_crops
 ```
+
+
+
+
 
 # For Developers
 

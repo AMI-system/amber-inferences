@@ -4,12 +4,12 @@ import argparse
 import json
 import os
 import random
-import boto3
 import torch
 import string
 
 from amber_inferences.utils.custom_models import load_models
 from amber_inferences.utils.inference_scripts import localisation_only, initialise_session
+
 
 def main(
     chunk_id,
@@ -56,7 +56,8 @@ def main(
         localisation_model=localisation_model,
         box_threshold=box_threshold,
         device=device,
-        csv_file=csv_file,job_name=job_name
+        csv_file=csv_file,
+        job_name=job_name
     )
 
 
@@ -116,7 +117,7 @@ if __name__ == "__main__":
     job_name = args.job_name
     if job_name is None:
         # set as a random series of alphanumeric
-        job_name = ''.join(random.choice(f"{string.ascii_lowercase}{string.digits}") for i in range(16))
+        job_name = ''.join(random.choice(f"{string.ascii_uppercase}{string.digits}") for i in range(16))
     args.job_name = job_name
 
     print(f'Saving job info to {args.output_dir}/{job_name}_job_info.json')

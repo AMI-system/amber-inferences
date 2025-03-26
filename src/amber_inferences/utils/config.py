@@ -8,8 +8,7 @@ def validate_aws_credentials(credentials):
         "AWS_REGION",
         "AWS_URL_ENDPOINT",
         "UKCEH_username",
-        "UKCEH_password",
-        "directory"
+        "UKCEH_password"
     ]
     missing_keys = list(set(required_keys) - set(list(credentials.keys())))
     if missing_keys:

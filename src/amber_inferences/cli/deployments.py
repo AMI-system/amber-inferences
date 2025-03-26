@@ -29,18 +29,31 @@ def main():
         help="Optional list to subset for specific countries.",
         default=None,
     )
+    parser.add_argument(
+        "--subset_deployments",
+        nargs="+",
+        help="Optional list to subset for specific deployments.",
+        default=None,
+    )
     args = parser.parse_args()
 
     # Load AWS credentials
     aws_credentials = load_credentials()
 
     # Print deployments
-    print_deployments(
+    summary = deployments_summary(
         aws_credentials,
         include_inactive=args.include_inactive,
         subset_countries=args.subset_countries,
-        print_image_count=args.print_image_count,
+        subset_deployments=args.subset_deployments,
+        print_image_count=args.print_image_count
     )
+
+    for dep_info in summary.values():
+        print(f"Deployment ID: {dep_info['deployment_id']} - Location: {dep_info['location_name']}")
+
+        if 'n_images' in dep_info.keys():
+            print(f" - This deployment has {dep_info['n_images']} images.")
 
 if __name__ == "__main__":
     main()

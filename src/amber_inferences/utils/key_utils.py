@@ -2,10 +2,10 @@ import json
 import os
 from math import ceil
 
-import boto3
+# import boto3
 
 
-def list_s3_keys(bucket_name, deployment_id="", credentials_file="credentials.json"):
+def list_s3_keys(s3_client, bucket_name, deployment_id="", subdir=None):
     """
     List all keys in an S3 bucket under a specific prefix.
 
@@ -16,16 +16,6 @@ def list_s3_keys(bucket_name, deployment_id="", credentials_file="credentials.js
     Returns:
         list: A list of S3 object keys.
     """
-    with open(credentials_file, encoding="utf-8") as config_file:
-        aws_credentials = json.load(config_file)
-
-    session = boto3.Session(
-        aws_access_key_id=aws_credentials["AWS_ACCESS_KEY_ID"],
-        aws_secret_access_key=aws_credentials["AWS_SECRET_ACCESS_KEY"],
-        region_name=aws_credentials["AWS_REGION"],
-    )
-    s3_client = session.client("s3", endpoint_url=aws_credentials["AWS_URL_ENDPOINT"])
-
     keys = []
     continuation_token = None
 
@@ -34,6 +24,8 @@ def list_s3_keys(bucket_name, deployment_id="", credentials_file="credentials.js
             "Bucket": bucket_name,
             "Prefix": deployment_id,
         }
+        if subdir:
+            list_kwargs["Prefix"] = os.path.join(deployment_id, subdir)
         if continuation_token:
             list_kwargs["ContinuationToken"] = continuation_token
 
@@ -49,22 +41,31 @@ def list_s3_keys(bucket_name, deployment_id="", credentials_file="credentials.js
         else:
             break
 
+    # remove corrupt/hidden keys
+    keys = [x for x in keys if not os.path.basename(x).startswith("$")]
+    keys = [x for x in keys if not os.path.basename(x).startswith(".")]
+    keys = [x for x in keys if "recycle" not in x]
+
     return keys
 
 
-def save_keys_to_file(keys, output_file):
+def save_keys(s3_client, bucket, deployment_id, output_file, subdir="snapshot_images"):
     """
-    Save S3 keys to a file, one per line.
+    Save S3 keys to a JSON file.
 
     Parameters:
-        keys (list): List of S3 keys.
-        output_file (str): Path to the output file.
+        s3_client: Boto3 S3 client.
+        bucket (str): Name of the S3 bucket.
+        deployment_id (str): Deployment ID for filtering keys.
+        output_file (str): Path to the output JSON file.
+        subdir (str): Subdirectory to filter keys (default: "snapshot_images").
     """
     os.makedirs(os.path.dirname(output_file) or os.getcwd(), exist_ok=True)
 
-    with open(output_file, "w") as f:
-        for key in keys:
-            f.write(key + "\n")
+    keys = list_s3_keys(s3_client, bucket, deployment_id, subdir)
+
+    with open(output_file, "w", encoding="UTF-8") as f:
+        json.dump(keys, f, indent=4)
 
 
 def load_workload(input_file, file_extensions, subset_dates=None):

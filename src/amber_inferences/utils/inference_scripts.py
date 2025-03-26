@@ -8,6 +8,7 @@ import boto3
 import torch
 import torchvision.transforms as transforms
 from PIL import Image
+import cv2
 from boto3.s3.transfer import TransferConfig
 
 # ignore the pandas Future Warning
@@ -117,6 +118,12 @@ def classify_order(image_tensor, order_model, order_labels, order_data_threshold
     return label, score
 
 
+def variance_of_laplacian(image):
+    # compute the Laplacian of the image and then return the focus
+    # measure, which is simply the variance of the Laplacian
+    return cv2.Laplacian(image, cv2.CV_64F).var()
+
+
 def classify_box(image_tensor, binary_model):
     """
     Classify the object as moth or non-moth using the binary model.
@@ -146,6 +153,7 @@ def crop_image_only(
     save_crops,
     box_threshold=0.995,
     job_name=None,
+    crop_dir=None,
 ):
     # transform_species = transforms.Compose(
     #     [
@@ -161,6 +169,7 @@ def crop_image_only(
         "bucket_name",
         "analysis_datetime",
         "job_name",
+        "image_bluriness",
         "crop_status",
         "box_score",
         "box_label",
@@ -168,16 +177,22 @@ def crop_image_only(
         "y_min",
         "x_max",
         "y_max",  # localisation info
+        "crop_bluriness",
+        "crop_area",
         "cropped_image_path",
     ]
 
     # extract the datetime from the image path
-    image_dt = os.path.basename(image_path).split("-")[0]
+    # take whichever split starts with 202
+    image_dt = os.path.basename(image_path).split("-")
+    image_dt = [x for x in image_dt if x.startswith("202")][0]
     image_dt = datetime.strptime(image_dt, "%Y%m%d%H%M%S%f")
     image_dt = datetime.strftime(image_dt, "%Y-%m-%d %H:%M:%S")
 
     current_dt = datetime.now()
     current_dt = datetime.strftime(current_dt, "%Y-%m-%d %H:%M:%S")
+
+    crops_df = pd.DataFrame(columns=all_cols)
 
     try:
         # check if image_path viable
@@ -209,12 +224,14 @@ def crop_image_only(
             header=not os.path.isfile(csv_file),
             index=False,
         )
+        crops_df = pd.concat([crops_df, df])
         return  # Skip this image
+
+    image_bluriness = variance_of_laplacian(np.array(image))
 
     original_image = image.copy()
     original_width, original_height = image.size
 
-    print("Inference for the localisation model...")
     localisation_outputs, box_coords = get_boxes(
         localisation_model,
         image,
@@ -240,48 +257,57 @@ def crop_image_only(
         box_score = localisation_outputs["scores"][i]
         box_label = localisation_outputs["labels"][i]
 
-        if box_score < box_threshold:
-            continue
+        crop_area = (x_max - x_min) * (y_max - y_min)
 
-        # Crop the detected region and perform classification
-        cropped_image = original_image.crop((x_min, y_min, x_max, y_max))
+        if float(box_score) >= box_threshold:
+            # Crop the detected region and perform classification
+            cropped_image = original_image.crop((x_min, y_min, x_max, y_max))
+            crop_bluriness = variance_of_laplacian(np.array(cropped_image))
 
-        # if save_crops then save the cropped image
-        crop_path = ""
-        if save_crops and i > 0:
-            crop_path = image_path.replace(".jpg", f"_crop{i}.jpg").replace(
-                "snapshots", "crops"
-            )
-            cropped_image.save(crop_path)
+            # if save_crops then save the cropped image
+            crop_path = ""
+            if save_crops:
+                crop_path = os.path.join(
+                    crop_dir,
+                    os.path.basename(image_path.replace(".jpg", f"_crop{i}.jpg")),
+                )
+                cropped_image.save(crop_path)
 
-        # append to csv with pandas
-        df = pd.DataFrame(
-            [
+            # append to csv with pandas
+            df = pd.DataFrame(
                 [
-                    image_path,
-                    image_dt,
-                    bucket_name,
-                    current_dt,
-                    job_name,
-                    crop_status,
-                    box_score,
-                    box_label,
-                    x_min,
-                    y_min,
-                    x_max,
-                    y_max,
-                    crop_path,
-                ]
-            ],
-            columns=all_cols,
-        )
+                    [
+                        image_path,
+                        image_dt,
+                        bucket_name,
+                        current_dt,
+                        job_name,
+                        image_bluriness,
+                        crop_status,
+                        box_score,
+                        box_label,
+                        x_min,
+                        y_min,
+                        x_max,
+                        y_max,
+                        crop_bluriness,
+                        crop_area,
+                        crop_path,
+                    ]
+                ],
+                columns=all_cols,
+            )
 
-        df.to_csv(
-            f"{csv_file}",
-            mode="a",
-            header=not os.path.isfile(csv_file),
-            index=False,
-        )
+            df.to_csv(
+                f"{csv_file}",
+                mode="a",
+                header=not os.path.isfile(csv_file),
+                index=False,
+            )
+            crops_df = pd.concat([crops_df, df])
+            skipped = skipped + [False]
+        else:
+            skipped = skipped + [True]
 
     # catch images where no detection or all considered too large/not confident enough
     if all(skipped):
@@ -293,9 +319,10 @@ def crop_image_only(
                     bucket_name,
                     current_dt,
                     job_name,
+                    image_bluriness,
                     "NO DETECTIONS FOR IMAGE",
                 ]
-                + [""] * (len(all_cols) - 6),
+                + [""] * (len(all_cols) - 7),
             ],
             columns=all_cols,
         )
@@ -305,6 +332,9 @@ def crop_image_only(
             header=not os.path.isfile(csv_file),
             index=False,
         )
+        crops_df = pd.concat([crops_df, df])
+
+    return crops_df
 
 
 def localisation_only(
@@ -584,6 +614,24 @@ def initialise_session(credentials_file="credentials.json"):
     return client
 
 
+def download_image_from_key(s3_client, key, bucket, output_dir):
+    """
+    Download an image from an S3 bucket using a key.
+
+    Args:
+        s3_client (boto3.Client): Initialised S3 client.
+        key (str): S3 key to download.
+        bucket (str): S3 bucket name.
+        deployment_id (str): ID of the deployment.
+
+    Returns:
+        str: Local path to the downloaded image.
+    """
+    local_path = f"{output_dir}/{os.path.basename(key)}"
+    os.makedirs(os.path.dirname(local_path), exist_ok=True)
+    s3_client.download_file(bucket, key, local_path)
+
+
 def download_and_analyse(
     keys,
     output_dir,
@@ -615,12 +663,14 @@ def download_and_analyse(
         Other args: Parameters for inference and analysis.
     """
     # Ensure output directory exists
-    os.makedirs(output_dir, exist_ok=True)
+    # os.makedirs(output_dir, exist_ok=True)
 
     for key in keys:
+        download_image_from_key(client, key, bucket_name, transfer_config, output_dir)
+
         local_path = os.path.join(output_dir, os.path.basename(key))
-        print(f"Downloading {key} to {local_path}")
-        client.download_file(bucket_name, key, local_path, Config=transfer_config)
+        # print(f"Downloading {key} to {local_path}")
+        # client.download_file(bucket_name, key, local_path, Config=transfer_config)
 
         # Perform image analysis if enabled
         print(f"Analysing {local_path}")
