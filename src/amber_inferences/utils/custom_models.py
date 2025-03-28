@@ -72,6 +72,7 @@ class ResNet50_order(nn.Module):
 
         return level_1
 
+
 def load_loc_model(weights_path, device):
     # Load the localisation model
     model_loc = torchvision.models.detection.fasterrcnn_resnet50_fpn(weights=None)
@@ -89,6 +90,7 @@ def load_loc_model(weights_path, device):
     model_loc.eval()
     return model_loc
 
+
 def load_models(
     device,
     localisation_model_path=None,
@@ -103,12 +105,12 @@ def load_models(
     """
     model_dict = {
         "localisation_model": None,
-        "classification_model":  None,
-        "species_model":  None,
-        "species_model_labels":  None,
-        "order_model":  None,
-        "order_model_thresholds":  None,
-        "order_model_labels":  None,
+        "classification_model": None,
+        "species_model": None,
+        "species_model_labels": None,
+        "order_model": None,
+        "order_model_thresholds": None,
+        "order_model_labels": None,
     }
 
     # Try loading the localisation model with load_loc_model, if not none
@@ -117,19 +119,21 @@ def load_models(
             localisation_model = load_loc_model(localisation_model_path, device)
 
         except Exception as e:
-            if str(e) == "Unpickling error":
-                print(f"Failed to load localisation model with load_loc_model: {e}, trying flatbug")
-                from flat_bug.predictor import Predictor
-                try:
-                    localisation_model = Predictor(model=localisation_model_path, device=device, dtype="float16")
-                except Exception as e:
-                    print(f"Failed to load localisation model with load_loc_model or flat_bug: {e}")
-                    localisation_model = None
-            else:
-                # print error message and escape
-                print(f"Failed to load localisation model with load_loc_model or flat_bug: {e}")
+            print(
+                f"Failed to load localisation model with load_loc_model: {e}, trying flatbug"
+            )
+            from flat_bug.predictor import Predictor
+
+            try:
+                localisation_model = Predictor(
+                    model=localisation_model_path, device=device, dtype="float16"
+                )
+            except Exception as f:
+                print(
+                    f"Failed to load localisation model with load_loc_model or flat_bug: {f}"
+                )
                 localisation_model = None
-        model_dict['localisation_model'] = localisation_model
+        model_dict["localisation_model"] = localisation_model
 
     # Load the binary model
     if binary_model_path is not None:
@@ -137,11 +141,13 @@ def load_models(
             "tf_efficientnetv2_b3", num_classes=2, weights=None
         )
         classification_model = classification_model.to(device)
-        checkpoint = torch.load(binary_model_path, map_location=device, weights_only=True)
+        checkpoint = torch.load(
+            binary_model_path, map_location=device, weights_only=True
+        )
         state_dict = checkpoint.get("model_state_dict") or checkpoint
         classification_model.load_state_dict(state_dict)
         classification_model.eval()
-        model_dict['classification_model'] = classification_model
+        model_dict["classification_model"] = classification_model
 
     # Load the order model
     if order_model_path is not None:
@@ -155,9 +161,9 @@ def load_models(
         )
         model_order = model_order.to(device)
         model_order.eval()
-        model_dict['order_model'] = model_order
-        model_dict['order_model_thresholds'] = order_data_thresholds
-        model_dict['order_model_labels'] = order_labels
+        model_dict["order_model"] = model_order
+        model_dict["order_model_thresholds"] = order_data_thresholds
+        model_dict["order_model_labels"] = order_labels
 
     # Load the species classifier model
     if species_model_path is not None:
@@ -165,13 +171,14 @@ def load_models(
         num_classes = len(species_category_map)
         species_model = Resnet50_species(num_classes=num_classes)
         species_model = species_model.to(device)
-        checkpoint = torch.load(species_model_path, map_location=device, weights_only=True)
+        checkpoint = torch.load(
+            species_model_path, map_location=device, weights_only=True
+        )
         # The model state dict is nested in some checkpoints, and not in others
         state_dict = checkpoint.get("model_state_dict") or checkpoint
         species_model.load_state_dict(state_dict)
         species_model.eval()
-        model_dict['species_model'] = species_model
-        model_dict['species_model_labels'] = species_category_map
+        model_dict["species_model"] = species_model
+        model_dict["species_model_labels"] = species_category_map
 
     return model_dict
-
