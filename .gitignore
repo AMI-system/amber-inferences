@@ -191,3 +191,4 @@ logs/
 *.jpg
 *.csv
 .DS_Store
+*.gif
