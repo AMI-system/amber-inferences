@@ -189,8 +189,15 @@ amber-inferences --chunk_id 1 \
     --save_crops
 ```
 
+### Using Slurm
 
+If you are using Slurm, there are several examples scripts for running the inference pipeline. These are located in the `./examples/slurm` directory. For examples to run all singapore inferences, using arrays and batches:
 
+```sh
+
+# for a full display of jobs running
+squeue -u USERNAME -o "%.18i %.9P %.20j %.8u %.2t %.10M %.6D %R"
+```
 
 
 # For Developers

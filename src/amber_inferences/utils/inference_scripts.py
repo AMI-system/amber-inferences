@@ -251,7 +251,7 @@ def crop_image_only(
 
     # for each detection
     for i in range(0, len(box_coords)):
-        crop_status = "crop " + str(i)
+        crop_status = "crop_" + str(i + 1)
         x_min, y_min, x_max, y_max = box_coords[i]
 
         box_score = localisation_outputs["scores"][i]
@@ -269,7 +269,7 @@ def crop_image_only(
             if save_crops:
                 crop_path = os.path.join(
                     crop_dir,
-                    os.path.basename(image_path.replace(".jpg", f"_crop{i}.jpg")),
+                    os.path.basename(image_path.replace(".jpg", f"_{crop_status}.jpg")),
                 )
                 cropped_image.save(crop_path)
 
@@ -427,7 +427,11 @@ def perform_inf(
         "image_datetime",
         "bucket_name",
         "analysis_datetime",
+        "image_bluriness",
         "crop_status",
+        "crop_bluriness",
+        "crop_area",
+        "cropped_image_path",
         "box_score",
         "box_label",
         "x_min",
@@ -438,7 +442,6 @@ def perform_inf(
         "class_confidence",  # binary class info
         "order_name",
         "order_confidence",  # order info
-        "cropped_image_path",
     ]
     all_cols = (
         all_cols
@@ -447,7 +450,8 @@ def perform_inf(
     )
 
     # extract the datetime from the image path
-    image_dt = os.path.basename(image_path).split("-")[0]
+    image_dt = os.path.basename(image_path).split("-")
+    image_dt = [x for x in image_dt if x.startswith("202")][0]
     image_dt = datetime.strptime(image_dt, "%Y%m%d%H%M%S%f")
     image_dt = datetime.strftime(image_dt, "%Y-%m-%d %H:%M:%S")
 
@@ -479,6 +483,8 @@ def perform_inf(
         )
         return  # Skip this image
 
+    image_bluriness = variance_of_laplacian(np.array(image))
+
     original_image = image.copy()
     original_width, original_height = image.size
 
@@ -502,17 +508,22 @@ def perform_inf(
 
     # for each detection
     for i in range(0, len(box_coords)):
-        crop_status = "crop " + str(i)
+        print(i)
+        crop_status = "crop_" + str(i + 1)
         x_min, y_min, x_max, y_max = box_coords[i]
 
         box_score = localisation_outputs["scores"][i]
         box_label = localisation_outputs["labels"][i]
 
+        crop_area = (x_max - x_min) * (y_max - y_min)
+
         if box_score < box_threshold:
             continue
+        skipped = skipped + [False]
 
         # Crop the detected region and perform classification
         cropped_image = original_image.crop((x_min, y_min, x_max, y_max))
+        crop_bluriness = variance_of_laplacian(np.array(cropped_image))
         cropped_tensor = transform_species(cropped_image).unsqueeze(0).to(proc_device)
 
         class_name, class_confidence = classify_box(cropped_tensor, binary_model)
@@ -531,9 +542,8 @@ def perform_inf(
 
         # if save_crops then save the cropped image
         crop_path = ""
-        if save_crops and i > 0:
-            crop_path = image_path.replace(".jpg", f"_crop{i}.jpg")
-
+        if save_crops:
+            crop_path = image_path.replace(".jpg", f"_{crop_status}.jpg")
             cropped_image.save(crop_path)
 
         # append to csv with pandas
@@ -544,7 +554,11 @@ def perform_inf(
                     image_dt,
                     bucket_name,
                     current_dt,
+                    image_bluriness,
                     crop_status,
+                    crop_bluriness,
+                    crop_area,
+                    crop_path,
                     box_score,
                     box_label,
                     x_min,
@@ -555,7 +569,6 @@ def perform_inf(
                     class_confidence,
                     order_name,
                     order_confidence,
-                    crop_path,
                 ]
                 + species_names
                 + species_confidences
@@ -578,10 +591,11 @@ def perform_inf(
                     image_path,
                     image_dt,
                     bucket_name,
+                    image_bluriness,
                     current_dt,
                     "NO DETECTIONS FOR IMAGE",
                 ]
-                + [""] * (len(all_cols) - 5),
+                + [""] * (len(all_cols) - 6),
             ],
             columns=all_cols,
         )
@@ -666,7 +680,7 @@ def download_and_analyse(
     # os.makedirs(output_dir, exist_ok=True)
 
     for key in keys:
-        download_image_from_key(client, key, bucket_name, transfer_config, output_dir)
+        download_image_from_key(client, key, bucket_name, output_dir)
 
         local_path = os.path.join(output_dir, os.path.basename(key))
         # print(f"Downloading {key} to {local_path}")

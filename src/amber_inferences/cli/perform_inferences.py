@@ -14,6 +14,7 @@ from amber_inferences.utils.inference_scripts import (
 
 def main(
     chunk_id,
+    batch_size,
     json_file,
     output_dir,
     bucket_name,
@@ -46,12 +47,21 @@ def main(
     with open(json_file, "r") as f:
         chunks = json.load(f)
 
-    if chunk_id not in chunks:
-        raise ValueError(f"Chunk ID {chunk_id} not found in JSON file.")
-
     client = initialise_session(credentials_file)
 
-    keys = chunks[chunk_id]["keys"]
+    try:
+        chunk_id = int(chunk_id)
+        batch_size = int(batch_size)
+        end = (chunk_id) * (batch_size)
+        if end > len(chunks):
+            end = len(chunks)
+        print((chunk_id - 1) * batch_size, end)
+        keys = chunks[(chunk_id - 1) * batch_size : end]
+    except ValueError as e:
+        raise ValueError(
+            f"{e}: Chunk ID {chunk_id} was not indexable in {json_file} (json len={len(chunks)})."
+        )
+
     download_and_analyse(
         keys=keys,
         output_dir=output_dir,
@@ -82,6 +92,12 @@ if __name__ == "__main__":
         help="ID of the chunk to process (e.g., 0, 1, 2, 3).",
     )
     parser.add_argument(
+        "--batch_size",
+        required=True,
+        default=1000,
+        help="Batch size for chunks",
+    )
+    parser.add_argument(
         "--json_file", required=True, help="Path to the JSON file with key chunks."
     )
     parser.add_argument(
@@ -105,7 +121,6 @@ if __name__ == "__main__":
     parser.add_argument(
         "--save_crops", action="store_true", help="Whether to save the crops."
     )
-    # TODO: ensure pipeline works with flatbug
     parser.add_argument(
         "--localisation_model_path",
         type=str,
@@ -212,6 +227,7 @@ if __name__ == "__main__":
 
     main(
         chunk_id=args.chunk_id,
+        batch_size=args.batch_size,
         json_file=args.json_file,
         output_dir=args.output_dir,
         bucket_name=args.bucket_name,
