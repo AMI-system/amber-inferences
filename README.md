@@ -115,13 +115,12 @@ cd ../amber_inferences
 
 ## Running
 
-Once everything is installed you can run the inference pipeline. The following commands are available:
-
-
+Once everything is installed you can run the inference pipeline.
 There is a tutorial set up in `./examples/tutorial.ipynb` which can be used to
 run and explore the pipeline. This is recommended for first time users.
+The commands below outline the process for running the pipeline from command line.
 
-### Running from command line
+
 
 #### Printing the Deployments Available
 
@@ -191,7 +190,7 @@ amber-inferences --chunk_id 1 \
 
 ### Using Slurm
 
-If you are using Slurm, there are several examples scripts for running the inference pipeline. These are located in the `./examples/slurm` directory. For examples to run all singapore inferences, using arrays and batches:
+If you are using Slurm, there are several examples scripts for running the inference pipeline. These are located in the `./slurm_scripts` directory. For examples to run all singapore inferences, using arrays and batches:
 
 ```sh
 

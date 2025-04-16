@@ -93,7 +93,6 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--batch_size",
-        required=True,
         default=1000,
         help="Batch size for chunks",
     )
