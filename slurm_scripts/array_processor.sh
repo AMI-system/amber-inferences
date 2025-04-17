@@ -1,19 +1,10 @@
 #!/bin/bash
-#SBATCH --output="./logs/$region/%x_chunk2_%a.out"
 #SBATCH --time=04:00:00
 
 echo "Job name: ${SLURM_JOB_NAME}"
 echo "Job ID: ${SLURM_ARRAY_JOB_ID}"
 echo "Chunk ID: ${SLURM_ARRAY_TASK_ID}"
 echo "Output csv: ${output_base_dir}/${deployment_id}/${deployment_id}_${SLURM_ARRAY_TASK_ID}.csv"
-# echo "$batch_number_padded"
-echo "$json_file"
-echo "$output_base_dir"
-echo "$deployment_id"
-echo "$region"
-echo "$credentials_file"
-echo $species_model
-echo $species_labels
 
 batch_number_padded=$(printf "%04d" $SLURM_ARRAY_TASK_ID)
 

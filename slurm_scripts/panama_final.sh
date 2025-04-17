@@ -54,7 +54,7 @@ for json_file in ${json_directory}/dep*.json; do
   number_of_batches=$((num_chunks / batch_size + 1))
 
   # Call the sbatch script for deployment using batches for arrays
-  sbatch --job-name="$deployment_id" \
+  sbatch --job-name="${region}_${deployment_id}" \
     --gres gpu:1 \
     --partition orchid \
     --account orchid \
