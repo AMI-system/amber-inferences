@@ -82,7 +82,6 @@ def main(
             f"\033[93m\033[1mSkipping {batch_size - len(keys)} images previously processed. "
             + "\N{Warning Sign}\033[0m\033[0m"
         )
-        return
 
     download_and_analyse(
         keys=keys,
