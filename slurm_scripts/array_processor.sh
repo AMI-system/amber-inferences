@@ -33,7 +33,8 @@ python3 -m amber_inferences.cli.perform_inferences \
   --binary_model_path ./models/moth-nonmoth-effv2b3_20220506_061527_30.pth \
   --localisation_model_path ./models/flat_bug_M.pt \
   --order_model_path ./models/dhc_best_128.pth \
-  --order_thresholds_path ./models/thresholdsTestTrain.csv
+  --order_thresholds_path ./models/thresholdsTestTrain.csv \
+  --skip_processed
 
 if [ $? -ne 0 ]; then
     echo "Error submitting job for chunk $SLURM_ARRAY_TASK_ID of deployment $deployment_id"

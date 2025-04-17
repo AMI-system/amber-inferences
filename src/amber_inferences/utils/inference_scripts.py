@@ -508,7 +508,6 @@ def perform_inf(
 
     # for each detection
     for i in range(0, len(box_coords)):
-        print(i)
         crop_status = "crop_" + str(i + 1)
         x_min, y_min, x_max, y_max = box_coords[i]
 

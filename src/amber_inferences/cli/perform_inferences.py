@@ -4,6 +4,7 @@ import argparse
 import json
 import os
 import torch
+import pandas as pd
 
 from amber_inferences.utils.custom_models import load_models
 from amber_inferences.utils.inference_scripts import (
@@ -33,6 +34,7 @@ def main(
     order_data_thresholds=None,
     top_n=5,
     csv_file="results.csv",
+    skip_processed=False,
 ):
     """
     Main function to process a specific chunk of S3 keys.
@@ -55,12 +57,32 @@ def main(
         end = (chunk_id) * (batch_size)
         if end > len(chunks):
             end = len(chunks)
-        print((chunk_id - 1) * batch_size, end)
         keys = chunks[(chunk_id - 1) * batch_size : end]
     except ValueError as e:
         raise ValueError(
             f"{e}: Chunk ID {chunk_id} was not indexable in {json_file} (json len={len(chunks)})."
         )
+
+    # if the csv files exists, and skip_processed is set to true, then remove keys which are already in the csv
+    if os.path.exists(csv_file) and skip_processed:
+        already_processed = pd.read_csv(csv_file)
+        csv_keys = already_processed["image_path"].tolist()
+        csv_keys = [os.path.basename(key) for key in csv_keys]
+        keys = [key for key in keys if os.path.basename(key) not in csv_keys]
+
+    # exit if length keys is 0
+    if len(keys) == 0:
+        print(
+            f"\033[93m\033[1mAll images already processed in {csv_file}"
+            + "\N{Warning Sign}\033[0m\033[0m"
+        )
+        return
+    elif len(keys) < batch_size:
+        print(
+            f"\033[93m\033[1mSkipping {batch_size - len(keys)} images previously processed. "
+            + "\N{Warning Sign}\033[0m\033[0m"
+        )
+        return
 
     download_and_analyse(
         keys=keys,
@@ -182,8 +204,20 @@ if __name__ == "__main__":
     parser.add_argument(
         "--csv_file", default="results.csv", help="Path to save analysis results."
     )
+    parser.add_argument(
+        "--skip_processed",
+        action="store_true",
+        help="Whether to rerun inferences for images which have already been processed.",
+    )
 
     args = parser.parse_args()
+
+    # if skip_processed is false, print that those will be skipped
+    if args.skip_processed:
+        print(
+            "\033[93m\033[1mNote: Images already processed will be skipped. "
+            + "\N{Warning Sign}\033[0m\033[0m"
+        )
 
     if torch.cuda.is_available():
         device = torch.device("cuda:0")
@@ -245,4 +279,5 @@ if __name__ == "__main__":
         device=device,
         top_n=args.top_n_species,
         csv_file=args.csv_file,
+        skip_processed=args.skip_processed,
     )
