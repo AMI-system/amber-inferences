@@ -35,6 +35,7 @@ def main(
     top_n=5,
     csv_file="results.csv",
     skip_processed=False,
+    verbose=False,
 ):
     """
     Main function to process a specific chunk of S3 keys.
@@ -77,10 +78,10 @@ def main(
             + "\N{Warning Sign}\033[0m\033[0m"
         )
         return
-    elif len(keys) < batch_size:
+    elif len(keys) < batch_size and verbose:
         print(
             f"\033[93m\033[1mSkipping {batch_size - len(keys)} images previously processed. "
-            + "\N{Warning Sign}\033[0m\033[0m"
+            + "\033[0m\033[0m"
         )
 
     download_and_analyse(
@@ -102,6 +103,7 @@ def main(
         order_data_thresholds=order_data_thresholds,
         top_n=top_n,
         csv_file=csv_file,
+        verbose=verbose,
     )
 
 
@@ -208,14 +210,19 @@ if __name__ == "__main__":
         action="store_true",
         help="Whether to rerun inferences for images which have already been processed.",
     )
+    parser.add_argument(
+        "--verbose",
+        action="store_true",
+        help="Whether to print verbose statements.",
+    )
 
     args = parser.parse_args()
 
     # if skip_processed is false, print that those will be skipped
     if args.skip_processed:
         print(
-            "\033[93m\033[1mNote: Images already processed will be skipped. "
-            + "\N{Warning Sign}\033[0m\033[0m"
+            "\n\033[95m\033[1mNote: Images already processed will be skipped. "
+            + "\033[0m\033[0m"
         )
 
     if torch.cuda.is_available():
@@ -247,6 +254,7 @@ if __name__ == "__main__":
     if not os.path.exists(os.path.abspath(args.json_file)):
         raise FileNotFoundError(f"JSON file not found: {args.json_file}")
 
+    print("\033[94m\033[1mLoading models...\033[0m\033[0m")
     models = load_models(
         device,
         os.path.abspath(args.localisation_model_path),
@@ -255,6 +263,7 @@ if __name__ == "__main__":
         os.path.abspath(args.order_thresholds_path),
         os.path.abspath(args.species_model_path),
         os.path.abspath(args.species_labels),
+        verbose=args.verbose,
     )
 
     main(
@@ -279,4 +288,5 @@ if __name__ == "__main__":
         top_n=args.top_n_species,
         csv_file=args.csv_file,
         skip_processed=args.skip_processed,
+        verbose=args.verbose,
     )

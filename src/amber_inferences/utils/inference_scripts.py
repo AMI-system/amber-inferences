@@ -61,11 +61,11 @@ def get_boxes(
     return [localisation_outputs, box_coords]
 
 
-def flatbug(image_path, flatbug_model):
+def flatbug(image_path, flatbug_model, save_annotation=False):
     output = flatbug_model(image_path)
 
-    # Save a visualization of the predictions
-    if len(output.json_data["boxes"]) > 0:
+    # Save a visualisation of the predictions
+    if len(output.json_data["boxes"]) > 0 and save_annotation:
         print(f"Saving annotated image: {image_path}")
         output.plot(
             outpath=f"{os.path.dirname(image_path)}/flatbug/flatbug_{os.path.basename(image_path)}"
@@ -391,221 +391,6 @@ def localisation_only(
             os.remove(local_path)
 
 
-def perform_inf(
-    image_path,
-    bucket_name,
-    localisation_model,
-    binary_model,
-    order_model,
-    order_labels,
-    regional_model,
-    regional_category_map,
-    proc_device,
-    order_data_thresholds,
-    csv_file,
-    save_crops,
-    box_threshold=0.995,
-    top_n=5,
-):
-    """
-    Perform inferences on an image including:
-    - object detection (localisation)
-    - order classification
-    - species classification
-    """
-
-    transform_species = transforms.Compose(
-        [
-            transforms.Resize((300, 300)),
-            transforms.ToTensor(),
-            transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5]),
-        ]
-    )
-
-    all_cols = [
-        "image_path",
-        "image_datetime",
-        "bucket_name",
-        "analysis_datetime",
-        "image_bluriness",
-        "crop_status",
-        "crop_bluriness",
-        "crop_area",
-        "cropped_image_path",
-        "box_score",
-        "box_label",
-        "x_min",
-        "y_min",
-        "x_max",
-        "y_max",  # localisation info
-        "class_name",
-        "class_confidence",  # binary class info
-        "order_name",
-        "order_confidence",  # order info
-    ]
-    all_cols = (
-        all_cols
-        + ["top_" + str(i + 1) + "_species" for i in range(top_n)]
-        + ["top_" + str(i + 1) + "_confidence" for i in range(top_n)]
-    )
-
-    # extract the datetime from the image path
-    image_dt = os.path.basename(image_path).split("-")
-    image_dt = [x for x in image_dt if x.startswith("202")][0]
-    image_dt = datetime.strptime(image_dt, "%Y%m%d%H%M%S%f")
-    image_dt = datetime.strftime(image_dt, "%Y-%m-%d %H:%M:%S")
-
-    current_dt = datetime.now()
-    current_dt = datetime.strftime(current_dt, "%Y-%m-%d %H:%M:%S")
-
-    try:
-        # check if image_path viable
-        if not os.path.exists(image_path):
-            raise FileNotFoundError(f"Image file not found: {image_path}")
-        image_path = os.path.abspath(image_path)
-        image = Image.open(image_path).convert("RGB")
-    except Exception as e:
-        print(f"Error opening image {image_path}: {e}")
-
-        df = pd.DataFrame(
-            [
-                [image_path, image_dt, bucket_name, current_dt, "IMAGE CORRUPT"]
-                + [""] * (len(all_cols) - 5),
-            ],
-            columns=all_cols,
-        )
-
-        df.to_csv(
-            f"{csv_file}",
-            mode="a",
-            header=not os.path.isfile(csv_file),
-            index=False,
-        )
-        return  # Skip this image
-
-    image_bluriness = variance_of_laplacian(np.array(image))
-
-    original_image = image.copy()
-    original_width, original_height = image.size
-
-    print("Inference for the localisation model...")
-    localisation_outputs, box_coords = get_boxes(
-        localisation_model,
-        image,
-        image_path,
-        original_width,
-        original_height,
-        proc_device,
-    )
-
-    skipped = []
-
-    # catch no crops: if no boxes or all boxes below threshold
-    if len(box_coords) == 0 or all(
-        [score < box_threshold for score in localisation_outputs["scores"]]
-    ):
-        skipped = [True]
-
-    # for each detection
-    for i in range(0, len(box_coords)):
-        crop_status = "crop_" + str(i + 1)
-        x_min, y_min, x_max, y_max = box_coords[i]
-
-        box_score = localisation_outputs["scores"][i]
-        box_label = localisation_outputs["labels"][i]
-
-        crop_area = (x_max - x_min) * (y_max - y_min)
-
-        if box_score < box_threshold:
-            continue
-        skipped = skipped + [False]
-
-        # Crop the detected region and perform classification
-        cropped_image = original_image.crop((x_min, y_min, x_max, y_max))
-        crop_bluriness = variance_of_laplacian(np.array(cropped_image))
-        cropped_tensor = transform_species(cropped_image).unsqueeze(0).to(proc_device)
-
-        class_name, class_confidence = classify_box(cropped_tensor, binary_model)
-        order_name, order_confidence = classify_order(
-            cropped_tensor, order_model, order_labels, order_data_thresholds
-        )
-
-        # Annotate image with bounding box and class
-        if class_name == "moth" or "Lepidoptera" in order_name:
-            species_names, species_confidences = classify_species(
-                cropped_tensor, regional_model, regional_category_map, top_n
-            )
-
-        else:
-            species_names, species_confidences = [""] * top_n, [""] * top_n
-
-        # if save_crops then save the cropped image
-        crop_path = ""
-        if save_crops:
-            crop_path = image_path.replace(".jpg", f"_{crop_status}.jpg")
-            cropped_image.save(crop_path)
-
-        # append to csv with pandas
-        df = pd.DataFrame(
-            [
-                [
-                    image_path,
-                    image_dt,
-                    bucket_name,
-                    current_dt,
-                    image_bluriness,
-                    crop_status,
-                    crop_bluriness,
-                    crop_area,
-                    crop_path,
-                    box_score,
-                    box_label,
-                    x_min,
-                    y_min,
-                    x_max,
-                    y_max,
-                    class_name,
-                    class_confidence,
-                    order_name,
-                    order_confidence,
-                ]
-                + species_names
-                + species_confidences
-            ],
-            columns=all_cols,
-        )
-
-        df.to_csv(
-            f"{csv_file}",
-            mode="a",
-            header=not os.path.isfile(csv_file),
-            index=False,
-        )
-
-    # catch images where no detection or all considered too large/not confident enough
-    if all(skipped):
-        df = pd.DataFrame(
-            [
-                [
-                    image_path,
-                    image_dt,
-                    bucket_name,
-                    image_bluriness,
-                    current_dt,
-                    "NO DETECTIONS FOR IMAGE",
-                ]
-                + [""] * (len(all_cols) - 6),
-            ],
-            columns=all_cols,
-        )
-        df.to_csv(
-            f"{csv_file}",
-            mode="a",
-            header=not os.path.isfile(csv_file),
-            index=False,
-        )
-
-
 def initialise_session(credentials_file="credentials.json"):
     """
     Load AWS and API credentials from a configuration file and initialise an AWS session.
@@ -645,6 +430,200 @@ def download_image_from_key(s3_client, key, bucket, output_dir):
     s3_client.download_file(bucket, key, local_path)
 
 
+def get_image_metadata(path):
+    try:
+        dt_string = [
+            x for x in os.path.basename(path).split("-") if x.startswith("202")
+        ][0]
+        return datetime.strptime(dt_string, "%Y%m%d%H%M%S%f").strftime(
+            "%Y-%m-%d %H:%M:%S"
+        )
+    except Exception:
+        return ""
+
+
+def load_image(path):
+    try:
+        if not os.path.exists(path):
+            raise FileNotFoundError(f"Image file not found: {path}")
+        return Image.open(path).convert("RGB")
+    except Exception as e:
+        print(f"Error opening image {path}: {e}")
+        return None
+
+
+def perform_inf(
+    image_path,
+    bucket_name,
+    localisation_model,
+    binary_model,
+    order_model,
+    order_labels,
+    regional_model,
+    regional_category_map,
+    proc_device,
+    order_data_thresholds,
+    csv_file,
+    save_crops,
+    box_threshold=0.995,
+    top_n=5,
+    verbose=False,
+):
+    """
+    Perform inferences on an image including:
+    - object detection (localisation)
+    - binary classification
+    - order classification
+    - species classification
+    """
+
+    def save_result_row(data, columns):
+        df = pd.DataFrame([data], columns=columns)
+        df.to_csv(csv_file, mode="a", header=not os.path.isfile(csv_file), index=False)
+
+    def get_default_row(
+        image_path, image_dt, bucket_name, current_dt, bluriness, message
+    ):
+        return [image_path, image_dt, bucket_name, current_dt, bluriness, message] + [
+            ""
+        ] * (len(all_cols) - 6)
+
+    transform_species = transforms.Compose(
+        [
+            transforms.Resize((300, 300)),
+            transforms.ToTensor(),
+            transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5]),
+        ]
+    )
+
+    all_cols = (
+        [
+            "image_path",
+            "image_datetime",
+            "bucket_name",
+            "analysis_datetime",
+            "image_bluriness",
+            "crop_status",
+            "crop_bluriness",
+            "crop_area",
+            "cropped_image_path",
+            "box_score",
+            "box_label",
+            "x_min",
+            "y_min",
+            "x_max",
+            "y_max",
+            "class_name",
+            "class_confidence",
+            "order_name",
+            "order_confidence",
+        ]
+        + [f"top_{i+1}_species" for i in range(top_n)]
+        + [f"top_{i+1}_confidence" for i in range(top_n)]
+    )
+
+    image_dt = get_image_metadata(image_path)
+    current_dt = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    image = load_image(image_path)
+    if image is None:
+        save_result_row(
+            get_default_row(
+                image_path, image_dt, bucket_name, current_dt, "", "Image corrupt"
+            ),
+            all_cols,
+        )
+        return
+
+    image_bluriness = variance_of_laplacian(np.array(image))
+    original_image = image.copy()
+    original_width, original_height = image.size
+
+    localisation_outputs, box_coords = get_boxes(
+        localisation_model,
+        image,
+        image_path,
+        original_width,
+        original_height,
+        proc_device,
+    )
+
+    if verbose:
+        print(f" - Found {len(box_coords)} box(es) in image {image_path}")
+
+    skipped = True
+
+    for i, (x_min, y_min, x_max, y_max) in enumerate(box_coords):
+        box_score = localisation_outputs["scores"][i]
+        if box_score < box_threshold:
+            continue
+
+        skipped = False
+        crop_status = f"crop_{i+1}"
+        crop_area = (x_max - x_min) * (y_max - y_min)
+        box_label = localisation_outputs["labels"][i]
+
+        cropped_image = original_image.crop((x_min, y_min, x_max, y_max))
+        crop_bluriness = variance_of_laplacian(np.array(cropped_image))
+        cropped_tensor = transform_species(cropped_image).unsqueeze(0).to(proc_device)
+
+        class_name, class_confidence = classify_box(cropped_tensor, binary_model)
+        order_name, order_confidence = classify_order(
+            cropped_tensor, order_model, order_labels, order_data_thresholds
+        )
+
+        if class_name == "moth" or "Lepidoptera" in order_name:
+            species_names, species_confidences = classify_species(
+                cropped_tensor, regional_model, regional_category_map, top_n
+            )
+        else:
+            species_names, species_confidences = [""] * top_n, [""] * top_n
+
+        crop_path = ""
+        if save_crops:
+            crop_path = image_path.replace(".jpg", f"_{crop_status}.jpg")
+            cropped_image.save(crop_path)
+
+        row = (
+            [
+                image_path,
+                image_dt,
+                bucket_name,
+                current_dt,
+                image_bluriness,
+                crop_status,
+                crop_bluriness,
+                crop_area,
+                crop_path,
+                box_score,
+                box_label,
+                x_min,
+                y_min,
+                x_max,
+                y_max,
+                class_name,
+                class_confidence,
+                order_name,
+                order_confidence,
+            ]
+            + species_names
+            + species_confidences
+        )
+
+        save_result_row(row, all_cols)
+
+    if skipped:
+        row = get_default_row(
+            image_path,
+            image_dt,
+            bucket_name,
+            current_dt,
+            image_bluriness,
+            "No detections for this image.",
+        )
+        save_result_row(row, all_cols)
+
+
 def download_and_analyse(
     keys,
     output_dir,
@@ -664,6 +643,7 @@ def download_and_analyse(
     order_data_thresholds=None,
     top_n=5,
     csv_file="results.csv",
+    verbose=False,
 ):
     """
     Download images from S3 and perform analysis.
@@ -675,19 +655,14 @@ def download_and_analyse(
         client (boto3.Client): Initialised S3 client.
         Other args: Parameters for inference and analysis.
     """
-    # Ensure output directory exists
-    # os.makedirs(output_dir, exist_ok=True)
+    if verbose:
+        print("Analysing images:")
 
     for key in keys:
         download_image_from_key(client, key, bucket_name, output_dir)
-
         local_path = os.path.join(output_dir, os.path.basename(key))
-        # print(f"Downloading {key} to {local_path}")
-        # client.download_file(bucket_name, key, local_path, Config=transfer_config)
 
         # Perform image analysis if enabled
-        print(f"Analysing {local_path}")
-
         if perform_inference:
             perform_inf(
                 local_path,
@@ -704,6 +679,7 @@ def download_and_analyse(
                 csv_file=csv_file,
                 top_n=top_n,
                 save_crops=save_crops,
+                verbose=verbose,
             )
         # Remove the image if cleanup is enabled
         if remove_image:
