@@ -66,9 +66,11 @@ Contact [Katriona Goldmann](kgoldmann@turing.ac.uk) for the AWS Access and UKCEH
 Create a conda environment:
 
 ```bash
-conda create -p "~/amber/" python=3.9
+conda create -p "~/amber/" python=3.11
 conda activate "~/amber/"
 ```
+If you are not using flatbut you can get away with python=3.9.
+
 
 ```sh
 conda install --yes --file requirements.txt
@@ -93,7 +95,7 @@ Create an environment:
 
 ```bash
 source ~/miniforge3/bin/activate
-conda activate "~/conda_envs/flatbug/"
+conda activate "~/amber/"
 
 cd amber-inferences
 pip install -e .
@@ -171,8 +173,6 @@ python3 -m amber_inferences.cli.perform_inferences \
   --perform_inference \
   --box_threshold 0.99 \
   --save_crops
-
-
 
   # or
 

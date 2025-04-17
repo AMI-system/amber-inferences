@@ -83,7 +83,7 @@ def deployment_data(
     include_inactive=False,
     subset_countries=None,
     subset_deployments=None,
-    include_image_count=True,
+    include_file_count=True,
 ):
     """
     Provide the deployments available through the object store.
@@ -131,7 +131,7 @@ def deployment_data(
         for dep in sorted(all_deps):
             dep_info = [x for x in country_depl if x["deployment_id"] == dep][0]
 
-            # get the number of images for this deployment
+            # get the number of files for this deployment
             prefix = f"{dep_info['deployment_id']}/snapshot_images"
             bucket_name = dep_info["country_code"].lower()
             dep_info["bucket_name"] = bucket_name
@@ -139,7 +139,7 @@ def deployment_data(
             dep_info["country"] = country
             dep_info["country_code"] = country_code
 
-            if include_image_count:
+            if include_file_count:
                 counts = count_files(s3_client, bucket_name, prefix)
                 dep_info["image_count"] = counts["image_count"]
                 dep_info["audio_count"] = counts["audio_count"]
@@ -149,7 +149,7 @@ def deployment_data(
 
 
 def print_deployments(
-    credentials, include_inactive=False, subset_countries=None, print_image_count=True
+    credentials, include_inactive=False, subset_countries=None, print_file_count=True
 ):
     """
     Provide the deployments available through the object store.
@@ -223,7 +223,7 @@ def print_deployments(
             prefix = f"{dep_info['deployment_id']}/snapshot_images"
             bucket_name = dep_info["country_code"].lower()
 
-            if print_image_count:
+            if print_file_count:
                 counts = count_files(s3_client, bucket_name, prefix)
                 total_images = total_images + counts["image_count"]
                 total_audio = total_audio + counts["audio_count"]
@@ -232,13 +232,13 @@ def print_deployments(
                     + f" images and \033[1m{counts['audio_count']}\033[0m audio files.\n"
                 )
 
-        if print_image_count:
+        if print_file_count:
             print(
                 f"\033[1m - {country} has {total_images}\033[0m images total\033[0m\n"
             )
 
 
-if __name__ == "__main__":
+def main():
     parser = argparse.ArgumentParser(
         description="Script for printing the deployments available on the Jasmin object store."
     )
@@ -254,7 +254,7 @@ if __name__ == "__main__":
         help="Flag to include inactive deployments.",
     )
     parser.add_argument(
-        "--print_image_count",
+        "--print_file_count",
         action=argparse.BooleanOptionalAction,
         default=False,
         help="Flag to print the number of images per deployment.",
@@ -274,5 +274,9 @@ if __name__ == "__main__":
         aws_credentials,
         args.include_inactive,
         args.subset_countries,
-        args.print_image_count,
+        args.print_file_count,
     )
+
+
+if __name__ == "__main__":
+    main()
