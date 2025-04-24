@@ -5,7 +5,7 @@ conda activate "~/conda_envs/flatbug/"
 
 json_directory="./keys/panama_final"
 region="pan"
-output_base_dir="./data/panama_inferences"
+output_base_dir="/gws/nopw/j04/ceh_generic/kgoldmann/panama_inferences"
 credentials_file="./credentials.json"
 
 mkdir -p "${output_base_dir}"
