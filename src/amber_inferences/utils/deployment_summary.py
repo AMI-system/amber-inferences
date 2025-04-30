@@ -27,6 +27,10 @@ def get_deployments(username, password):
         return response.json()
     except requests.exceptions.HTTPError as err:
         print(f"HTTP Error: {err}")
+        if response.status_code == 404:
+            print(
+                "App not available. Check at https://connect-apps.ceh.ac.uk/ami-data-upload/"
+            )
         if response.status_code == 401:
             print("Wrong username or password. Try again!")
         sys.exit(1)
@@ -224,7 +228,7 @@ def print_deployments(
 
             if print_file_count:
                 counts = count_files(s3_client, bucket_name, prefix)
-                # print(counts)
+                print(counts)
                 total_images = total_images + counts["image_count"]
                 total_audio = total_audio + counts["audio_count"]
                 print(

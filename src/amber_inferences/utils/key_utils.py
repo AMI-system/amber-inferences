@@ -2,8 +2,6 @@ import json
 import os
 from math import ceil
 
-# import boto3
-
 
 def list_s3_keys(s3_client, bucket_name, deployment_id="", subdir=None):
     """

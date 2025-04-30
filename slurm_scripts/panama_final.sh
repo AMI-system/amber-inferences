@@ -20,11 +20,11 @@ for i in {83..92}; do
   dep_files+=("dep$(printf '%06d' $i)")
 done
 
-# create the key files, only needs to run once
-for dep in "${dep_files[@]}"; do
-  echo $dep
-  amber-keys --bucket $region --deployment_id $dep --output_file "${json_directory}/${dep}.json"
-done
+# # create the key files, only needs to run once
+# for dep in "${dep_files[@]}"; do
+#   echo $dep
+#   amber-keys --bucket $region --deployment_id $dep --output_file "${json_directory}/${dep}.json"
+# done
 
 # for each json file/deployment, create a slurm job
 for json_file in ${json_directory}/dep*.json; do

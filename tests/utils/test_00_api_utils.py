@@ -1,8 +1,7 @@
 import unittest
 from unittest.mock import patch, Mock
-import sys
 from amber_inferences.utils.api_utils import get_deployments
-import requests
+
 
 class TestGetDeployments(unittest.TestCase):
 
@@ -13,7 +12,12 @@ class TestGetDeployments(unittest.TestCase):
         mock_response = Mock()
         mock_response.status_code = 200
         mock_response.json.return_value = [
-            {"deployment_id": "123", "country": "UK", "status": "active", "country_code": "GB"}
+            {
+                "deployment_id": "123",
+                "country": "UK",
+                "status": "active",
+                "country_code": "GB",
+            }
         ]
         mock_get.return_value = mock_response
 
@@ -29,7 +33,8 @@ class TestGetDeployments(unittest.TestCase):
     #     # Mock a failed HTTP request (401 Unauthorized)
     #     mock_response = Mock()
     #     mock_response.status_code = 401
-    #     mock_response.raise_for_status.side_effect = requests.exceptions.HTTPError("401 Unauthorized")  # Simulate HTTPError
+    #     # Simulate HTTPError
+    #     mock_response.raise_for_status.side_effect = requests.exceptions.HTTPError("401 Unauthorized")
 
     #     mock_get.return_value = mock_response
 

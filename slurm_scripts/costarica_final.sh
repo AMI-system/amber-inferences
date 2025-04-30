@@ -53,6 +53,7 @@ for json_file in ${json_directory}/dep*.json; do
   # Call the sbatch script for deployment using batches for arrays
   sbatch --job-name="${region}_${deployment_id}" \
     --gres gpu:1 \
+    --qos orchid \
     --partition orchid \
     --account orchid \
     --mem 8G \
