@@ -155,13 +155,6 @@ def crop_image_only(
     job_name=None,
     crop_dir=None,
 ):
-    # transform_species = transforms.Compose(
-    #     [
-    #         transforms.Resize((300, 300)),
-    #         transforms.ToTensor(),
-    #         transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5]),
-    #     ]
-    # )
 
     all_cols = [
         "image_path",
