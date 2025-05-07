@@ -10,6 +10,8 @@ import numpy as np
 from torchvision import transforms
 import torch
 from PIL import Image
+import pandas as pd
+import networkx as nx
 
 
 def l2_normalize(tensor):
@@ -160,3 +162,81 @@ def calculate_cost(crop1, crop2, w_cnn=1, w_iou=1, w_box=1, w_dis=1):
         "dist_ratio_cost": dist_ratio_cost,
         "total_cost": total_cost,
     }
+
+
+def find_best_matches(df):
+    """
+    Calculate the best match and cost for a crop and those from the previous image
+    """
+    # Keep only best match for each (image_path1, crop1_id)
+    filtered_df = df.copy()
+    filtered_df.sort_values("total_cost", ascending=True, inplace=True)
+    best_matches = filtered_df.drop_duplicates(
+        subset=["image_path1", "crop1_id"], keep="first"
+    )
+    return best_matches
+
+
+def track_id_calc(best_matches, cost_threshold=1):
+    # Thresholded Track Graph
+    filtered_matches = best_matches[best_matches["total_cost"] < cost_threshold]
+
+    def node_id(image_path, crop_id):
+        return f"{image_path}|{crop_id}"
+
+    best_match_sets = best_matches.apply(
+        lambda row: node_id(row["image_path1"], row["crop1_id"]), axis=1
+    )
+
+    G_thresh = nx.Graph()
+    for _, row in filtered_matches.iterrows():
+        n1 = node_id(row["image_path1"], row["crop1_id"])
+        n2 = node_id(row["image_path2"], row["crop2_id"])
+        G_thresh.add_edge(n1, n2)
+
+    # Assign track IDs
+    track_mapping = {}
+    for tid, component in enumerate(nx.connected_components(G_thresh)):
+        for node in component:
+            track_mapping[node] = f"Track_{str(tid).rjust(5, '0')}"
+
+    # Collect all unique nodes
+    all_nodes = set(best_match_sets.tolist()).union(track_mapping.keys())
+
+    # Create lookup for cost (minimum for each crop)
+    cost_lookup = {}
+    for _, row in best_matches.iterrows():
+        for prefix in ["1", "2"]:
+            nid = node_id(row[f"image_path{prefix}"], row[f"crop{prefix}_id"])
+            cost = row["total_cost"]
+            cost_lookup[nid] = min(cost_lookup.get(nid, float("inf")), cost)
+
+    # Final Output
+    output_rows = []
+    for node in all_nodes:
+        image_path, crop_id = node.rsplit("|", 1)
+        output_rows.append(
+            {
+                "image_path": image_path,
+                "crop_id": crop_id,
+                "track_id": track_mapping.get(
+                    node
+                ),  # May be None if not matched under threshold
+                "total_cost": cost_lookup.get(node),
+            }
+        )
+
+    output_df = pd.DataFrame(output_rows)
+
+    # populate the None values
+    max_track = int(
+        sorted([x for x in output_df["track_id"].unique() if x is not None])[
+            -1
+        ].replace("Track_", "")
+    )
+    non_vals = output_df["track_id"][output_df["track_id"].isnull()]
+    non_ids = range(max_track + 1, len(non_vals) + max_track + 1)
+    non_ids = [f"Track_{str(x).rjust(5, '0')}" for x in non_ids]
+    output_df.loc[output_df["track_id"].isnull(), "track_id"] = non_ids
+
+    return output_df
