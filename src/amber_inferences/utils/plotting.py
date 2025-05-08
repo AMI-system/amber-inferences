@@ -31,14 +31,26 @@ def image_annotation(
         if "label" not in box.keys():
             box["label"] = ""
 
+        try:
+            if os.path.exists("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"):
+                font_path = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
+            else:
+                import cv2
+
+                font_path = os.path.join(
+                    cv2.__path__[0], "qt", "fonts", "DejaVuSans.ttf"
+                )
+            font = ImageFont.truetype(font_path, size=50)
+        except Exception as e:
+            print(f"Loading default font, could not another: {e}")
+            font = ImageFont.load_default()
+
         draw.rectangle([x0, y0, x1, y1], outline=box["ann_col"], width=3)
         draw.text(
             (x0, y0),
             box["label"],
             fill=box["ann_col"],
-            font=ImageFont.truetype(
-                "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", size=50
-            ),
+            font=font,
         )
 
     return img
