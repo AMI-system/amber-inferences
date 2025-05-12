@@ -9,9 +9,10 @@ import math
 import numpy as np
 from torchvision import transforms
 import torch
-from PIL import Image
 import pandas as pd
 import networkx as nx
+from itertools import product
+from tqdm import tqdm
 
 
 def l2_normalize(tensor):
@@ -129,13 +130,25 @@ def calculate_cost(crop1, crop2, w_cnn=1, w_iou=1, w_box=1, w_dis=1):
     features1 = crop1["embedding"]
     features2 = crop2["embedding"]
 
+    if features1 is None or features2 is None:
+        return {
+            "crop1_path": crop1["image_path"],
+            "crop1_crop": crop1["crop"],
+            "crop2_path": crop2["image_path"],
+            "crop2_crop": crop2["crop"],
+            "cnn_cost": None,
+            "iou_cost": None,
+            "box_ratio_cost": None,
+            "dist_ratio_cost": None,
+            "total_cost": None,
+        }
+
     bb1 = crop1["box"]
     bb2 = crop2["box"]
     bb1 = [bb1["xmin"], bb1["ymin"], bb1["xmax"], bb1["ymax"]]
     bb2 = [bb2["xmin"], bb2["ymin"], bb2["xmax"], bb2["ymax"]]
 
-    image = Image.open(crop1["image_path"]).convert("RGB")
-    image_width, image_height = image.size
+    image_width, image_height = crop1["image_size"]
 
     diag = math.sqrt(image_width**2 + image_height**2)
 
@@ -240,3 +253,46 @@ def track_id_calc(best_matches, cost_threshold=1):
     output_df.loc[output_df["track_id"].isnull(), "track_id"] = non_ids
 
     return output_df
+
+
+def crop_costs(embedding_list):
+    all_crop_pairs = []
+    image_paths = list(embedding_list.keys())
+
+    for i in range(len(image_paths) - 1):
+        img1 = image_paths[i]
+        img2 = image_paths[i + 1]
+
+        crops1 = embedding_list[img1]
+        crops2 = embedding_list[img2]
+
+        for c1, c2 in product(crops1, crops2):
+            all_crop_pairs.append((img1, c1, img2, c2))
+
+    results = []
+
+    for image_a, crop_a, image_b, crop_b in tqdm(all_crop_pairs):
+        c_a = embedding_list[image_a][crop_a]
+        c_a["image_path"] = image_a
+        c_b = embedding_list[image_b][crop_b]
+        c_b["image_path"] = image_b
+
+        res = calculate_cost(c_a, c_b)
+        results.append(res)
+
+    columns = [
+        "image_path1",
+        "crop1_id",
+        "image_path2",
+        "crop2_id",
+        "cnn_cost",
+        "iou_cost",
+        "box_ratio_cost",
+        "dist_ratio_cost",
+        "total_cost",
+    ]
+
+    results_df = pd.DataFrame(results).reset_index(drop=True)
+    results_df.columns = columns
+
+    return results_df

@@ -156,7 +156,6 @@ if __name__ == "__main__":
         default=0.99,
         help="Threshold for the confidence score of bounding boxes. Default: 0.99",
     )
-    # TODO: option not to run binary/species
     parser.add_argument(
         "--binary_model_path",
         type=str,
