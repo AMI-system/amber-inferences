@@ -58,7 +58,12 @@ def main(
         end = (chunk_id) * (batch_size)
         if end > len(chunks):
             end = len(chunks)
-        keys = chunks[(chunk_id - 1) * batch_size : end]
+        # minus 2 to re-run and capture the embedding from the last image
+        if chunk_id > 1:
+            start = chunk_id - 2
+        else:
+            start = chunk_id - 1
+        keys = chunks[(start) * batch_size : end]
     except ValueError as e:
         raise ValueError(
             f"{e}: Chunk ID {chunk_id} was not indexable in {json_file} (json len={len(chunks)})."

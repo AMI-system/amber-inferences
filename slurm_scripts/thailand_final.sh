@@ -5,7 +5,7 @@ conda activate "~/conda_envs/flatbug/"
 
 json_directory="./keys/thailand_final"
 region="tha"
-output_base_dir="/gws/nopw/j04/ceh_generic/kgoldmann/thailand_inferences"
+output_base_dir="/gws/nopw/j04/ceh_generic/kgoldmann/thailand_inferences_tracking"
 credentials_file="./credentials.json"
 
 mkdir -p "${output_base_dir}"
@@ -17,11 +17,11 @@ for i in {74..78}; do
   dep_files+=("dep$(printf '%06d' $i)")
 done
 
-# # create the key files, only needs to run once
-# for dep in "${dep_files[@]}"; do
-#   echo $dep
-#   amber-keys --bucket $region --deployment_id $dep --output_file "${json_directory}/${dep}.json"
-# done
+# create the key files, only needs to run once
+for dep in "${dep_files[@]}"; do
+  echo $dep
+  amber-keys --bucket $region --deployment_id $dep --output_file "${json_directory}/${dep}.json"
+done
 
 # for each json file/deployment, create a slurm job
 for json_file in ${json_directory}/dep*.json; do
@@ -54,6 +54,7 @@ for json_file in ${json_directory}/dep*.json; do
   sbatch --job-name="${region}_${deployment_id}" \
     --gres gpu:1 \
     --partition orchid \
+    --qos orchid \
     --account orchid \
     --mem 8G \
     --array=1-$number_of_batches \

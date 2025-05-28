@@ -47,7 +47,14 @@ def list_s3_keys(s3_client, bucket_name, deployment_id="", subdir=None):
     return keys
 
 
-def save_keys(s3_client, bucket, deployment_id, output_file, subdir="snapshot_images"):
+def save_keys(
+    s3_client,
+    bucket,
+    deployment_id,
+    output_file,
+    subdir="snapshot_images",
+    verbose=False,
+):
     """
     Save S3 keys to a JSON file.
 
@@ -61,6 +68,13 @@ def save_keys(s3_client, bucket, deployment_id, output_file, subdir="snapshot_im
     os.makedirs(os.path.dirname(output_file) or os.getcwd(), exist_ok=True)
 
     keys = list_s3_keys(s3_client, bucket, deployment_id, subdir)
+
+    # sort keys
+    keys.sort()
+
+    # Save keys to the output file
+    if verbose:
+        print(f"Saving all {len(keys)} keys/records to {output_file}")
 
     with open(output_file, "w", encoding="UTF-8") as f:
         json.dump(keys, f, indent=4)

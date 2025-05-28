@@ -13,6 +13,8 @@ import pandas as pd
 import networkx as nx
 from itertools import product
 from tqdm import tqdm
+import matplotlib.pyplot as plt
+import matplotlib.colors as mcolors
 
 
 def l2_normalize(tensor):
@@ -131,17 +133,19 @@ def calculate_cost(crop1, crop2, w_cnn=1, w_iou=1, w_box=1, w_dis=1):
     features2 = crop2["embedding"]
 
     if features1 is None or features2 is None:
-        return {
-            "crop1_path": crop1["image_path"],
-            "crop1_crop": crop1["crop"],
-            "crop2_path": crop2["image_path"],
-            "crop2_crop": crop2["crop"],
-            "cnn_cost": None,
-            "iou_cost": None,
-            "box_ratio_cost": None,
-            "dist_ratio_cost": None,
-            "total_cost": None,
-        }
+        return pd.DataFrame(
+            {
+                "crop1_path": [crop1["image_path"]],
+                "crop1_crop": [crop1["crop"]],
+                "crop2_path": [crop2["image_path"]],
+                "crop2_crop": [crop2["crop"]],
+                "cnn_cost": [None],
+                "iou_cost": [None],
+                "box_ratio_cost": [None],
+                "dist_ratio_cost": [None],
+                "total_cost": [None],
+            }
+        ).reset_index(drop=True)
 
     bb1 = crop1["box"]
     bb2 = crop2["box"]
@@ -164,93 +168,139 @@ def calculate_cost(crop1, crop2, w_cnn=1, w_iou=1, w_box=1, w_dis=1):
         + w_dis * dist_ratio_cost
     )
 
-    return {
-        "crop1_path": crop1["image_path"],
-        "crop1_crop": crop1["crop"],
-        "crop2_path": crop2["image_path"],
-        "crop2_crop": crop2["crop"],
-        "cnn_cost": cnn_cost,
-        "iou_cost": iou_cost,
-        "box_ratio_cost": box_ratio_cost,
-        "dist_ratio_cost": dist_ratio_cost,
-        "total_cost": total_cost,
+    results = {
+        "crop1_path": [crop1["image_path"]],
+        "crop1_crop": [crop1["crop"]],
+        "crop2_path": [crop2["image_path"]],
+        "crop2_crop": [crop2["crop"]],
+        "cnn_cost": [cnn_cost],
+        "iou_cost": [iou_cost],
+        "box_ratio_cost": [box_ratio_cost],
+        "dist_ratio_cost": [dist_ratio_cost],
+        "total_cost": [total_cost],
     }
+    results_df = pd.DataFrame(results).reset_index(drop=True)
+
+    return results_df
 
 
 def find_best_matches(df):
     """
     Calculate the best match and cost for a crop and those from the previous image
     """
-    # Keep only best match for each (image_path1, crop1_id)
+    # Keep only best match for each (image, crop)
     filtered_df = df.copy()
     filtered_df.sort_values("total_cost", ascending=True, inplace=True)
+
     best_matches = filtered_df.drop_duplicates(
-        subset=["image_path1", "crop1_id"], keep="first"
+        subset=["crop1_path", "crop1_crop"], keep="first"
     )
+    best_matches = best_matches.drop_duplicates(
+        subset=["crop2_path", "crop2_crop"], keep="first"
+    )
+    best_matches.columns = [
+        "previous_image",
+        "best_match_crop",
+        "image_path",
+        "crop_status",
+        "cnn_cost",
+        "iou_cost",
+        "box_ratio_cost",
+        "dist_ratio_cost",
+        "total_cost",
+    ]
     return best_matches
 
 
-def track_id_calc(best_matches, cost_threshold=1):
-    # Thresholded Track Graph
+def track_id_calc(best_matches, cost_threshold=1, col_palette="tab20"):
+    # Make a copy and rename the relevant columns
+    best_matches = best_matches.copy()
+    rename_map = {
+        best_matches.columns[0]: "image1",
+        best_matches.columns[1]: "crop1",
+        best_matches.columns[2]: "image2",
+        best_matches.columns[3]: "crop2",
+    }
+    best_matches = best_matches.rename(columns=rename_map)
+
+    # Filter based on the cost threshold
     filtered_matches = best_matches[best_matches["total_cost"] < cost_threshold]
 
     def node_id(image_path, crop_id):
         return f"{image_path}|{crop_id}"
 
-    best_match_sets = best_matches.apply(
-        lambda row: node_id(row["image_path1"], row["crop1_id"]), axis=1
-    )
-
+    # Build a graph of matches under the threshold
     G_thresh = nx.Graph()
     for _, row in filtered_matches.iterrows():
-        n1 = node_id(row["image_path1"], row["crop1_id"])
-        n2 = node_id(row["image_path2"], row["crop2_id"])
+        n1 = node_id(row["image1"], row["crop1"])
+        n2 = node_id(row["image2"], row["crop2"])
         G_thresh.add_edge(n1, n2)
 
-    # Assign track IDs
+    # Assign track IDs from connected components
     track_mapping = {}
     for tid, component in enumerate(nx.connected_components(G_thresh)):
         for node in component:
             track_mapping[node] = f"Track_{str(tid).rjust(5, '0')}"
 
-    # Collect all unique nodes
-    all_nodes = set(best_match_sets.tolist()).union(track_mapping.keys())
+    # Collect all unique nodes from both sides
+    all_nodes = set()
+    for _, row in best_matches.iterrows():
+        all_nodes.add(node_id(row["image1"], row["crop1"]))
+        all_nodes.add(node_id(row["image2"], row["crop2"]))
 
-    # Create lookup for cost (minimum for each crop)
+    # Create lookup for cost (minimum per crop node)
     cost_lookup = {}
     for _, row in best_matches.iterrows():
         for prefix in ["1", "2"]:
-            nid = node_id(row[f"image_path{prefix}"], row[f"crop{prefix}_id"])
+            nid = node_id(row[f"image{prefix}"], row[f"crop{prefix}"])
             cost = row["total_cost"]
             cost_lookup[nid] = min(cost_lookup.get(nid, float("inf")), cost)
 
-    # Final Output
+    # Assemble the final output rows
     output_rows = []
     for node in all_nodes:
-        image_path, crop_id = node.rsplit("|", 1)
+        image_path, crop_id = node.rsplit("|", 2)
         output_rows.append(
             {
                 "image_path": image_path,
                 "crop_id": crop_id,
                 "track_id": track_mapping.get(
                     node
-                ),  # May be None if not matched under threshold
+                ),  # May be None if unmatched under threshold
                 "total_cost": cost_lookup.get(node),
             }
         )
 
     output_df = pd.DataFrame(output_rows)
 
-    # populate the None values
-    max_track = int(
-        sorted([x for x in output_df["track_id"].unique() if x is not None])[
-            -1
-        ].replace("Track_", "")
+    # Assign unique track IDs to unmatched crops
+    max_existing_id = max(
+        [int(tid.replace("Track_", "")) for tid in output_df["track_id"].dropna()],
+        default=-1,
     )
-    non_vals = output_df["track_id"][output_df["track_id"].isnull()]
-    non_ids = range(max_track + 1, len(non_vals) + max_track + 1)
-    non_ids = [f"Track_{str(x).rjust(5, '0')}" for x in non_ids]
-    output_df.loc[output_df["track_id"].isnull(), "track_id"] = non_ids
+    unmatched_mask = output_df["track_id"].isnull()
+    unmatched_indices = output_df[unmatched_mask].index
+    new_ids = [
+        f"Track_{str(i).rjust(5, '0')}"
+        for i in range(max_existing_id + 1, max_existing_id + 1 + unmatched_mask.sum())
+    ]
+    output_df.loc[unmatched_indices, "track_id"] = new_ids
+
+    # create a colour label
+    # Generate N unique colors for each track
+    num_tracks = output_df["track_id"].nunique()
+
+    # Use a colormap to get visually distinct colors
+    cmap = plt.cm.get_cmap(col_palette, num_tracks)  # tab20
+
+    # Map track_id to hex colors
+    track_id_to_color = {
+        track_id: mcolors.to_hex(cmap(i))
+        for i, track_id in enumerate(sorted(output_df["track_id"].unique()))
+    }
+
+    # Add color column to DataFrame
+    output_df["colour"] = output_df["track_id"].map(track_id_to_color)
 
     return output_df
 
@@ -269,30 +319,27 @@ def crop_costs(embedding_list):
         for c1, c2 in product(crops1, crops2):
             all_crop_pairs.append((img1, c1, img2, c2))
 
-    results = []
-
     for image_a, crop_a, image_b, crop_b in tqdm(all_crop_pairs):
         c_a = embedding_list[image_a][crop_a]
         c_a["image_path"] = image_a
         c_b = embedding_list[image_b][crop_b]
         c_b["image_path"] = image_b
 
-        res = calculate_cost(c_a, c_b)
-        results.append(res)
+        results_df = calculate_cost(c_a, c_b)
 
-    columns = [
-        "image_path1",
-        "crop1_id",
-        "image_path2",
-        "crop2_id",
-        "cnn_cost",
-        "iou_cost",
-        "box_ratio_cost",
-        "dist_ratio_cost",
-        "total_cost",
-    ]
+    # columns = [
+    #     "image_path1",
+    #     "crop1_id",
+    #     "image_path2",
+    #     "crop2_id",
+    #     "cnn_cost",
+    #     "iou_cost",
+    #     "box_ratio_cost",
+    #     "dist_ratio_cost",
+    #     "total_cost",
+    # ]
 
-    results_df = pd.DataFrame(results).reset_index(drop=True)
-    results_df.columns = columns
+    # results_df = pd.DataFrame(results).reset_index(drop=True)
+    # results_df.columns = columns
 
     return results_df
