@@ -1,5 +1,6 @@
 import json
 import os
+import pandas as pd
 from math import ceil
 
 
@@ -72,12 +73,28 @@ def save_keys(
     # sort keys
     keys.sort()
 
+    # sort by session date
+    df_json = pd.DataFrame(keys, columns=["filename"])
+    df_json["datetime"] = df_json["filename"].apply(
+        lambda x: x.split("/")[2].replace("-snapshot.jpg", "")
+    )
+    df_json["datetime"] = pd.to_datetime(df_json["datetime"], format="%Y%m%d%H%M%S")
+
+    # if the time is < 12, add 24 hours to the date
+    df_json["session"] = df_json["datetime"]
+    df_json["session"] = df_json["datetime"].apply(
+        lambda x: x - pd.Timedelta(days=1) if x.hour < 12 else x
+    )
+    df_json["session"] = df_json["session"].dt.strftime("%Y-%m-%d")
+
+    sessions = df_json.groupby("session")["filename"].apply(list).to_dict()
+
     # Save keys to the output file
     if verbose:
         print(f"Saving all {len(keys)} keys/records to {output_file}")
 
     with open(output_file, "w", encoding="UTF-8") as f:
-        json.dump(keys, f, indent=4)
+        json.dump(sessions, f, indent=4)
 
 
 def load_workload(input_file, file_extensions, subset_dates=None):

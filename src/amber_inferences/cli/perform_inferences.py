@@ -15,7 +15,6 @@ from amber_inferences.utils.inference_scripts import (
 
 def main(
     chunk_id,
-    batch_size,
     json_file,
     output_dir,
     bucket_name,
@@ -49,21 +48,13 @@ def main(
     """
     with open(json_file, "r") as f:
         chunks = json.load(f)
+    session_dates = list(chunks.keys())
 
     client = initialise_session(credentials_file)
 
     try:
-        chunk_id = int(chunk_id)
-        batch_size = int(batch_size)
-        end = (chunk_id) * (batch_size)
-        if end > len(chunks):
-            end = len(chunks)
-        # minus 2 to re-run and capture the embedding from the last image
-        if chunk_id > 1:
-            start = chunk_id - 2
-        else:
-            start = chunk_id - 1
-        keys = chunks[(start) * batch_size : end]
+        chunk_id = int(chunk_id) - 1  # Convert to zero-based index
+        keys = chunks[session_dates[chunk_id]]
     except ValueError as e:
         raise ValueError(
             f"{e}: Chunk ID {chunk_id} was not indexable in {json_file} (json len={len(chunks)})."
@@ -76,6 +67,12 @@ def main(
         csv_keys = [os.path.basename(key) for key in csv_keys]
         keys = [key for key in keys if os.path.basename(key) not in csv_keys]
 
+        if len(csv_keys) > 0 and verbose:
+            print(
+                f"\033[93m\033[1mSkipping {len(csv_keys)} images previously processed. "
+                + "\033[0m\033[0m"
+            )
+
     # exit if length keys is 0
     if len(keys) == 0:
         print(
@@ -83,11 +80,6 @@ def main(
             + "\N{Warning Sign}\033[0m\033[0m"
         )
         return
-    elif len(keys) < batch_size and verbose:
-        print(
-            f"\033[93m\033[1mSkipping {batch_size - len(keys)} images previously processed. "
-            + "\033[0m\033[0m"
-        )
 
     download_and_analyse(
         keys=keys,
@@ -118,11 +110,6 @@ if __name__ == "__main__":
         "--chunk_id",
         required=True,
         help="ID of the chunk to process (e.g., 0, 1, 2, 3).",
-    )
-    parser.add_argument(
-        "--batch_size",
-        default=1000,
-        help="Batch size for chunks",
     )
     parser.add_argument(
         "--json_file", required=True, help="Path to the JSON file with key chunks."
@@ -272,7 +259,6 @@ if __name__ == "__main__":
 
     main(
         chunk_id=args.chunk_id,
-        batch_size=args.batch_size,
         json_file=args.json_file,
         output_dir=args.output_dir,
         bucket_name=args.bucket_name,

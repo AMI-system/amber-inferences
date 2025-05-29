@@ -4,18 +4,21 @@
 echo "Job name: ${SLURM_JOB_NAME}"
 echo "Job ID: ${SLURM_ARRAY_JOB_ID}"
 echo "Chunk ID: ${SLURM_ARRAY_TASK_ID}"
-echo "Output csv: ${output_base_dir}/${deployment_id}/${deployment_id}_${SLURM_ARRAY_TASK_ID}.csv"
 
-batch_number_padded=$(printf "%04d" $SLURM_ARRAY_TASK_ID)
+
+IFS=' ' read -r -a session_names_array <<< "$session_names_string"
+this_session="${session_names_array[$SLURM_ARRAY_TASK_ID - 1]}"
+echo "Session date: ${this_session}"
+
+echo "Output csv: ${output_base_dir}/${deployment_id}/${deployment_id}_${this_session}.csv"
 
 python3 -m amber_inferences.cli.perform_inferences \
   --chunk_id ${SLURM_ARRAY_TASK_ID} \
-  --batch_size $batch_size \
   --json_file "${json_file}" \
   --output_dir "${output_base_dir}" \
   --bucket_name "${region}" \
   --credentials_file "${credentials_file}" \
-  --csv_file "${output_base_dir}/${deployment_id}/${deployment_id}_${batch_number_padded}.csv" \
+  --csv_file "${output_base_dir}/${deployment_id}/${deployment_id}_${this_session}.csv" \
   --species_model_path $species_model \
   --species_labels $species_labels \
   --perform_inference \

@@ -1,6 +1,6 @@
 import os
 import warnings
-from datetime import datetime
+from datetime import datetime, time
 import json
 import numpy as np
 import pandas as pd
@@ -172,6 +172,7 @@ def crop_image_only(
         "image_datetime",
         "bucket_name",
         "analysis_datetime",
+        "recording_session",
         "job_name",
         "image_bluriness",
         "crop_status",
@@ -196,6 +197,13 @@ def crop_image_only(
     current_dt = datetime.now()
     current_dt = datetime.strftime(current_dt, "%Y-%m-%d %H:%M:%S")
 
+    # if the time is after 12:00 then recording_session is current_dt, else it is the previous day
+    recording_session = image_dt.split(" ")[0]
+    if datetime.strptime(image_dt, "%Y-%m-%d %H:%M:%S").time() < time(12, 0, 0):
+        recording_session = (
+            datetime.strptime(image_dt, "%Y-%m-%d %H:%M:%S") - pd.Timedelta(days=1)
+        ).strftime("%Y-%m-%d")
+
     crops_df = pd.DataFrame(columns=all_cols)
 
     try:
@@ -214,10 +222,11 @@ def crop_image_only(
                     image_dt,
                     bucket_name,
                     current_dt,
+                    recording_session,
                     job_name,
                     "IMAGE CORRUPT",
                 ]
-                + [""] * (len(all_cols) - 6),
+                + [""] * (len(all_cols) - 7),
             ],
             columns=all_cols,
         )
@@ -285,6 +294,7 @@ def crop_image_only(
                         image_dt,
                         bucket_name,
                         current_dt,
+                        recording_session,
                         job_name,
                         image_bluriness,
                         crop_status,
@@ -322,6 +332,7 @@ def crop_image_only(
                     image_dt,
                     bucket_name,
                     current_dt,
+                    recording_session,
                     job_name,
                     image_bluriness,
                     "NO DETECTIONS FOR IMAGE",
@@ -439,11 +450,19 @@ def get_image_metadata(path):
         dt_string = [
             x for x in os.path.basename(path).split("-") if x.startswith("202")
         ][0]
-        return datetime.strptime(dt_string, "%Y%m%d%H%M%S").strftime(
+        image_dt = datetime.strptime(dt_string, "%Y%m%d%H%M%S").strftime(
             "%Y-%m-%d %H:%M:%S"
         )
+
+        # if the time is after 12:00 then recording_session is current_dt, else it is the previous day
+        recording_session = image_dt.split(" ")[0]
+        if datetime.strptime(image_dt, "%Y-%m-%d %H:%M:%S").time() < time(12, 0, 0):
+            recording_session = (
+                datetime.strptime(image_dt, "%Y-%m-%d %H:%M:%S") - pd.Timedelta(days=1)
+            ).strftime("%Y-%m-%d")
+        return image_dt, recording_session
     except Exception:
-        return ""
+        return "", ""
 
 
 def load_image(path):
@@ -454,291 +473,6 @@ def load_image(path):
     except Exception as e:
         print(f"Error opening image {path}: {e}")
         return None
-
-
-# def perform_inf_old(
-#     image_path,
-#     bucket_name,
-#     localisation_model,
-#     binary_model,
-#     order_model,
-#     order_labels,
-#     regional_model,
-#     regional_category_map,
-#     proc_device,
-#     order_data_thresholds,
-#     csv_file,
-#     save_crops,
-#     box_threshold=0.995,
-#     top_n=5,
-#     verbose=False,
-#     previous_image=None,
-# ):
-#     """
-#     Perform inferences on an image including:
-#     - object detection (localisation)
-#     - binary classification
-#     - order classification
-#     - species classification
-#     """
-
-#     def save_result_row(data, columns):
-#         df = pd.DataFrame([data], columns=columns)
-#         df.to_csv(csv_file, mode="a", header=not os.path.isfile(csv_file), index=False)
-
-#     def convert_ndarrays(obj):
-#         if isinstance(obj, dict):
-#             return {k: convert_ndarrays(v) for k, v in obj.items()}
-#         elif isinstance(obj, list):
-#             return [convert_ndarrays(i) for i in obj]
-#         elif isinstance(obj, np.ndarray):
-#             return obj.tolist()
-#         else:
-#             return obj
-
-#     def save_embedding(data):
-#         json_output_file = image_path.replace(".jpg", ".json")
-#         if verbose:
-#             print(f" - Saving embedding to {json_output_file}")
-
-#         with open(json_output_file, "w") as f:
-#             json.dump(convert_ndarrays(data), f)
-
-#     def get_default_row(
-#         image_path, image_dt, bucket_name, current_dt, bluriness, message
-#     ):
-#         return [image_path, image_dt, bucket_name, current_dt, bluriness, message] + [
-#             ""
-#         ] * (len(all_cols) - 6)
-
-#     transform_species = transforms.Compose(
-#         [
-#             transforms.Resize((300, 300)),
-#             transforms.ToTensor(),
-#             transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5]),
-#         ]
-#     )
-
-#     # load in embedding from the previous image
-#     if previous_image is not None and os.path.isfile(
-#         previous_image.replace(".jpg", ".json")
-#     ):
-#         with open(previous_image.replace(".jpg", ".json"), "r") as f:
-#             previous_image_embedding = json.load(f)
-#     else:
-#         print(f" - No previous image embedding found for {previous_image}.")
-#         previous_image_embedding = {}
-
-#     if verbose:
-#         print(
-#             f" - Found {len(previous_image_embedding)} crops from the previous image ({previous_image})."
-#         )
-
-#     all_cols = (
-#         [
-#             "image_path",
-#             "image_datetime",
-#             "bucket_name",
-#             "analysis_datetime",
-#             "image_bluriness",
-#             "crop_status",
-#             "crop_bluriness",
-#             "crop_area",
-#             "cropped_image_path",
-#             "box_score",
-#             "box_label",
-#             "x_min",
-#             "y_min",
-#             "x_max",
-#             "y_max",
-#             "class_name",
-#             "class_confidence",
-#             "order_name",
-#             "order_confidence",
-#         ]
-#         + [f"top_{i+1}_species" for i in range(top_n)]
-#         + [f"top_{i+1}_confidence" for i in range(top_n)]
-#         + [
-#             "previous_image",
-#             "best_match_crop",
-#             "cnn_cost",
-#             "iou_cost",
-#             "box_ratio_cost",
-#             "dist_ratio_cost",
-#             "total_cost",
-#         ]
-#     )
-
-#     image_dt = get_image_metadata(image_path)
-#     current_dt = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-
-#     image = load_image(image_path)
-#     if image is None:
-#         save_result_row(
-#             get_default_row(
-#                 image_path, image_dt, bucket_name, current_dt, "", "Image corrupt"
-#             ),
-#             all_cols,
-#         )
-#         save_embedding({})
-#         return
-
-#     image_bluriness = variance_of_laplacian(np.array(image))
-#     original_image = image.copy()
-#     original_width, original_height = image.size
-
-#     localisation_outputs, box_coords = get_boxes(
-#         localisation_model,
-#         image,
-#         image_path,
-#         original_width,
-#         original_height,
-#         proc_device,
-#     )
-
-#     if verbose:
-#         print(f" - Found {len(box_coords)} box(es) in image {image_path}")
-
-#     skipped = True
-#     embedding_list = {}
-#     for i, (x_min, y_min, x_max, y_max) in enumerate(box_coords):
-#         box_score = localisation_outputs["scores"][i]
-#         if box_score < box_threshold:
-#             continue
-
-#         skipped = False
-#         crop_status = f"crop_{i+1}"
-#         crop_area = (x_max - x_min) * (y_max - y_min)
-#         box_label = localisation_outputs["labels"][i]
-
-#         cropped_image = original_image.crop((x_min, y_min, x_max, y_max))
-#         crop_bluriness = variance_of_laplacian(np.array(cropped_image))
-#         cropped_tensor = transform_species(cropped_image).unsqueeze(0).to(proc_device)
-
-#         class_name, class_confidence = classify_box(cropped_tensor, binary_model)
-#         order_name, order_confidence = classify_order(
-#             cropped_tensor, order_model, order_labels, order_data_thresholds
-#         )
-
-#         if class_name == "moth" or "Lepidoptera" in order_name:
-#             species_names, species_confidences, embedding = classify_species(
-#                 cropped_tensor, regional_model, regional_category_map, top_n
-#             )
-#         else:
-#             species_names, species_confidences, embedding = (
-#                 [""] * top_n,
-#                 [""] * top_n,
-#                 None,
-#             )
-
-#         embedding_list[crop_status] = {
-#             "embedding": embedding,
-#             "image_path": os.path.basename(image_path),
-#             "image_size": [original_width, original_height],
-#             "crop": crop_status,
-#             "box": {"xmin": x_min, "ymin": y_min, "xmax": x_max, "ymax": y_max},
-#         }
-
-#         crop_path = ""
-#         if save_crops:
-#             crop_path = image_path.replace(".jpg", f"_{crop_status}.jpg")
-#             cropped_image.save(crop_path)
-
-#         # tracking
-#         if len(previous_image_embedding) > 0:
-#             crop_similarities = pd.DataFrame({})
-
-#             for crop_1 in list(previous_image_embedding.keys()):
-#                 c_1 = previous_image_embedding[crop_1]
-#                 c_2 = embedding_list[crop_status]
-
-#                 results_df = calculate_cost(c_1, c_2)
-#                 crop_similarities = pd.concat([crop_similarities, results_df])
-
-#             best_matches = find_best_matches(crop_similarities)
-#         else:
-#             best_matches = pd.DataFrame(
-#                 {
-#                     "previous_image": [previous_image],
-#                     "best_match_crop": [""],
-#                     "cnn_cost": [0],
-#                     "iou_cost": [0],
-#                     "box_ratio_cost": [0],
-#                     "dist_ratio_cost": [0],
-#                     "total_cost": [0],
-#                 },
-#                 columns=[
-#                     "previous_image",
-#                     "best_match_crop",
-#                     "cnn_cost",
-#                     "iou_cost",
-#                     "box_ratio_cost",
-#                     "dist_ratio_cost",
-#                     "total_cost",
-#                 ],
-#             )
-
-#         row = (
-#             [
-#                 image_path,
-#                 image_dt,
-#                 bucket_name,
-#                 current_dt,
-#                 image_bluriness,
-#                 crop_status,
-#                 crop_bluriness,
-#                 crop_area,
-#                 crop_path,
-#                 box_score,
-#                 box_label,
-#                 x_min,
-#                 y_min,
-#                 x_max,
-#                 y_max,
-#                 class_name,
-#                 class_confidence,
-#                 order_name,
-#                 order_confidence,
-#             ]
-#             + species_names
-#             + species_confidences
-#             + [
-#                 best_matches["previous_image"].values[0],
-#                 best_matches["best_match_crop"].values[0],
-#                 best_matches["cnn_cost"].values[0],
-#                 best_matches["iou_cost"].values[0],
-#                 best_matches["box_ratio_cost"].values[0],
-#                 best_matches["dist_ratio_cost"].values[0],
-#                 best_matches["total_cost"].values[0],
-#             ]
-#         )
-
-#         save_result_row(row, all_cols)
-
-#     # append embedding to json
-#     print(type(embedding_list))
-#     if verbose:
-#         print(
-#             f" - Saving embedding for {len(embedding_list)} crops to {image_path.replace('.jpg', '.json')}"
-#         )
-#     save_embedding(embedding_list)
-
-#     if skipped:
-#         row = get_default_row(
-#             image_path,
-#             image_dt,
-#             bucket_name,
-#             current_dt,
-#             image_bluriness,
-#             "No detections for this image.",
-#         )
-#         save_result_row(row, all_cols)
-#         # save_embedding({image_path: embedding_list})
-
-
-def save_result_row(data, columns, csv_file):
-    df = pd.DataFrame([data], columns=columns)
-    df.to_csv(csv_file, mode="a", header=not os.path.isfile(csv_file), index=False)
 
 
 def convert_ndarrays(obj):
@@ -752,7 +486,7 @@ def convert_ndarrays(obj):
         return obj
 
 
-def save_embedding(data, image_path, verbose):
+def save_embedding(data, image_path, verbose=False):
     json_output_file = image_path.replace(".jpg", ".json")
     if verbose:
         print(f" - Saving embedding to {json_output_file}")
@@ -761,38 +495,95 @@ def save_embedding(data, image_path, verbose):
         json.dump(convert_ndarrays(data), f)
 
 
+def save_result_row(data, columns, csv_file):
+    df = pd.DataFrame([data], columns=columns)
+    df.to_csv(csv_file, mode="a", header=not os.path.isfile(csv_file), index=False)
+
+
 def get_default_row(
-    image_path, image_dt, bucket_name, current_dt, bluriness, message, all_cols
+    image_path,
+    image_dt,
+    bucket_name,
+    current_dt,
+    recording_session,
+    bluriness,
+    message,
+    all_cols,
 ):
-    return [image_path, image_dt, bucket_name, current_dt, bluriness, message] + [
-        ""
-    ] * (len(all_cols) - 6)
+    return [
+        image_path,
+        image_dt,
+        bucket_name,
+        current_dt,
+        recording_session,
+        bluriness,
+        message,
+    ] + [""] * (len(all_cols) - 7)
 
 
-def get_previous_embedding(previous_image, verbose):
+def get_previous_embedding(previous_image, verbose=False):
     if previous_image is not None and os.path.isfile(
         previous_image.replace(".jpg", ".json")
     ):
         with open(previous_image.replace(".jpg", ".json"), "r") as f:
-            embedding = json.load(f)
-        if verbose:
-            print(
-                f" - Found {len(embedding)} crops from previous image {previous_image}"
-            )
-        return embedding
+            previous_image_embedding = json.load(f)
     else:
-        if verbose:
-            print(f" - No previous image embedding found for {previous_image}.")
-        return {}
+        print(f" - No previous image embedding found for {previous_image}.")
+        previous_image_embedding = {}
+
+    if verbose:
+        print(
+            f" - Found {len(previous_image_embedding)} crops from the previous image ({previous_image})."
+        )
+
+    return previous_image_embedding
 
 
-def get_all_columns(top_n):
-    return (
+# flake8: noqa: C901
+def perform_inf(
+    image_path,
+    bucket_name,
+    localisation_model,
+    binary_model,
+    order_model,
+    order_labels,
+    regional_model,
+    regional_category_map,
+    proc_device,
+    order_data_thresholds,
+    csv_file,
+    save_crops,
+    box_threshold=0.995,
+    top_n=5,
+    verbose=False,
+    previous_image=None,
+):
+    """
+    Perform inferences on an image including:
+    - object detection (localisation)
+    - binary classification
+    - order classification
+    - species classification
+    """
+
+    transform_species = transforms.Compose(
+        [
+            transforms.Resize((300, 300)),
+            transforms.ToTensor(),
+            transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5]),
+        ]
+    )
+
+    # load in embedding from the previous image
+    previous_image_embedding = get_previous_embedding(previous_image, verbose)
+
+    all_cols = (
         [
             "image_path",
             "image_datetime",
             "bucket_name",
             "analysis_datetime",
+            "recording_session",
             "image_bluriness",
             "crop_status",
             "crop_bluriness",
@@ -822,207 +613,168 @@ def get_all_columns(top_n):
         ]
     )
 
-
-def process_box(
-    i,
-    box,
-    image,
-    transform_species,
-    localisation_outputs,
-    models,
-    thresholds,
-    image_path,
-    save_crops,
-    previous_embedding,
-    top_n,
-    verbose,
-):
-    (
-        binary_model,
-        order_model,
-        order_labels,
-        order_data_thresholds,
-        regional_model,
-        regional_category_map,
-        proc_device,
-    ) = models
-
-    (x_min, y_min, x_max, y_max) = box
-    box_score = localisation_outputs["scores"][i]
-    if box_score < thresholds["box"]:
-        return None
-
-    crop_status = f"crop_{i+1}"
-    crop_area = (x_max - x_min) * (y_max - y_min)
-    box_label = localisation_outputs["labels"][i]
-
-    cropped_image = image.crop((x_min, y_min, x_max, y_max))
-    crop_bluriness = variance_of_laplacian(np.array(cropped_image))
-    cropped_tensor = transform_species(cropped_image).unsqueeze(0).to(proc_device)
-
-    class_name, class_confidence = classify_box(cropped_tensor, binary_model)
-    order_name, order_confidence = classify_order(
-        cropped_tensor, order_model, order_labels, order_data_thresholds
-    )
-
-    if class_name == "moth" or "Lepidoptera" in order_name:
-        species_names, species_confidences, embedding = classify_species(
-            cropped_tensor, regional_model, regional_category_map, top_n
-        )
-    else:
-        species_names, species_confidences, embedding = [""] * top_n, [""] * top_n, None
-
-    crop_path = ""
-    if save_crops:
-        crop_path = image_path.replace(".jpg", f"_{crop_status}.jpg")
-        cropped_image.save(crop_path)
-
-    embedding_info = {
-        "embedding": embedding,
-        "image_path": os.path.basename(image_path),
-        "image_size": list(image.size),
-        "crop": crop_status,
-        "box": {"xmin": x_min, "ymin": y_min, "xmax": x_max, "ymax": y_max},
-    }
-
-    if previous_embedding:
-        crop_similarities = pd.concat(
-            [
-                calculate_cost(previous_embedding[k], embedding_info)
-                for k in previous_embedding
-            ]
-        )
-        best_matches = find_best_matches(crop_similarities)
-    else:
-        best_matches = pd.DataFrame(
-            {
-                "previous_image": [""],
-                "best_match_crop": [""],
-                "cnn_cost": [0],
-                "iou_cost": [0],
-                "box_ratio_cost": [0],
-                "dist_ratio_cost": [0],
-                "total_cost": [0],
-            }
-        )
-
-    return (
-        [
-            crop_status,
-            crop_bluriness,
-            crop_area,
-            crop_path,
-            box_score,
-            box_label,
-            x_min,
-            y_min,
-            x_max,
-            y_max,
-            class_name,
-            class_confidence,
-            order_name,
-            order_confidence,
-        ]
-        + species_names
-        + species_confidences
-        + [
-            best_matches[col].values[0]
-            for col in [
-                "previous_image",
-                "best_match_crop",
-                "cnn_cost",
-                "iou_cost",
-                "box_ratio_cost",
-                "dist_ratio_cost",
-                "total_cost",
-            ]
-        ],
-        crop_status,
-        embedding_info,
-    )
-
-
-def perform_inf(
-    image_path,
-    bucket_name,
-    localisation_model,
-    binary_model,
-    order_model,
-    order_labels,
-    regional_model,
-    regional_category_map,
-    proc_device,
-    order_data_thresholds,
-    csv_file,
-    save_crops,
-    box_threshold=0.995,
-    top_n=5,
-    verbose=False,
-    previous_image=None,
-):
-    transform_species = transforms.Compose(
-        [
-            transforms.Resize((300, 300)),
-            transforms.ToTensor(),
-            transforms.Normalize(mean=[0.5] * 3, std=[0.5] * 3),
-        ]
-    )
-
-    all_cols = get_all_columns(top_n)
-    previous_embedding = get_previous_embedding(previous_image, verbose)
-    image_dt = get_image_metadata(image_path)
+    image_dt, recording_session = get_image_metadata(image_path)
     current_dt = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
     image = load_image(image_path)
     if image is None:
-        row = get_default_row(
-            image_path, image_dt, bucket_name, current_dt, "", "Image corrupt", all_cols
+        save_result_row(
+            get_default_row(
+                image_path,
+                image_dt,
+                bucket_name,
+                current_dt,
+                recording_session,
+                "",
+                "Image corrupt",
+                all_cols,
+            ),
+            all_cols,
+            csv_file,
         )
-        save_result_row(row, all_cols, csv_file)
-        save_embedding({}, image_path, verbose)
+        save_embedding({}, image_path, verbose=verbose)
         return
 
-    bluriness = variance_of_laplacian(np.array(image))
-    outputs, boxes = get_boxes(
-        localisation_model, image, image_path, *image.size, proc_device
+    image_bluriness = variance_of_laplacian(np.array(image))
+    original_image = image.copy()
+    original_width, original_height = image.size
+
+    localisation_outputs, box_coords = get_boxes(
+        localisation_model,
+        image,
+        image_path,
+        original_width,
+        original_height,
+        proc_device,
     )
 
     if verbose:
-        print(f" - Found {len(boxes)} box(es) in image {image_path}")
+        print(f" - Found {len(box_coords)} box(es) in image {image_path}")
 
-    skipped, embeddings = True, {}
-    for i, box in enumerate(boxes):
-        result = process_box(
-            i,
-            box,
-            image,
-            transform_species,
-            outputs,
-            (
-                binary_model,
-                order_model,
-                order_labels,
-                order_data_thresholds,
-                regional_model,
-                regional_category_map,
-                proc_device,
-            ),
-            {"box": box_threshold},
-            image_path,
-            save_crops,
-            previous_embedding,
-            top_n,
-            verbose,
-        )
-
-        if result is None:
+    skipped = True
+    embedding_list = {}
+    for i, (x_min, y_min, x_max, y_max) in enumerate(box_coords):
+        box_score = localisation_outputs["scores"][i]
+        if box_score < box_threshold:
             continue
 
-        row_data, crop_status, embedding_info = result
         skipped = False
-        row = [image_path, image_dt, bucket_name, current_dt, bluriness] + row_data
+        crop_status = f"crop_{i+1}"
+        crop_area = (x_max - x_min) * (y_max - y_min)
+        box_label = localisation_outputs["labels"][i]
+
+        cropped_image = original_image.crop((x_min, y_min, x_max, y_max))
+        crop_bluriness = variance_of_laplacian(np.array(cropped_image))
+        cropped_tensor = transform_species(cropped_image).unsqueeze(0).to(proc_device)
+
+        class_name, class_confidence = classify_box(cropped_tensor, binary_model)
+        order_name, order_confidence = classify_order(
+            cropped_tensor, order_model, order_labels, order_data_thresholds
+        )
+
+        if class_name == "moth" or "Lepidoptera" in order_name:
+            species_names, species_confidences, embedding = classify_species(
+                cropped_tensor, regional_model, regional_category_map, top_n
+            )
+        else:
+            species_names, species_confidences, embedding = (
+                [""] * top_n,
+                [""] * top_n,
+                None,
+            )
+
+        embedding_list[crop_status] = {
+            "embedding": embedding,
+            "image_path": os.path.basename(image_path),
+            "image_size": [original_width, original_height],
+            "crop": crop_status,
+            "box": {"xmin": x_min, "ymin": y_min, "xmax": x_max, "ymax": y_max},
+        }
+
+        crop_path = ""
+        if save_crops:
+            crop_path = image_path.replace(".jpg", f"_{crop_status}.jpg")
+            cropped_image.save(crop_path)
+
+        # tracking
+        if len(previous_image_embedding) > 0:
+            crop_similarities = pd.DataFrame({})
+
+            for crop_1 in list(previous_image_embedding.keys()):
+                c_1 = previous_image_embedding[crop_1]
+                c_2 = embedding_list[crop_status]
+
+                results_df = calculate_cost(c_1, c_2)
+                crop_similarities = pd.concat([crop_similarities, results_df])
+
+            best_matches = find_best_matches(crop_similarities)
+        else:
+            best_matches = pd.DataFrame(
+                {
+                    "previous_image": [previous_image],
+                    "best_match_crop": [""],
+                    "cnn_cost": [0],
+                    "iou_cost": [0],
+                    "box_ratio_cost": [0],
+                    "dist_ratio_cost": [0],
+                    "total_cost": [0],
+                },
+                columns=[
+                    "previous_image",
+                    "best_match_crop",
+                    "cnn_cost",
+                    "iou_cost",
+                    "box_ratio_cost",
+                    "dist_ratio_cost",
+                    "total_cost",
+                ],
+            )
+
+        row = (
+            [
+                image_path,
+                image_dt,
+                bucket_name,
+                current_dt,
+                recording_session,
+                image_bluriness,
+                crop_status,
+                crop_bluriness,
+                crop_area,
+                crop_path,
+                box_score,
+                box_label,
+                x_min,
+                y_min,
+                x_max,
+                y_max,
+                class_name,
+                class_confidence,
+                order_name,
+                order_confidence,
+            ]
+            + species_names
+            + species_confidences
+            + [
+                best_matches["previous_image"].values[0],
+                best_matches["best_match_crop"].values[0],
+                best_matches["cnn_cost"].values[0],
+                best_matches["iou_cost"].values[0],
+                best_matches["box_ratio_cost"].values[0],
+                best_matches["dist_ratio_cost"].values[0],
+                best_matches["total_cost"].values[0],
+            ]
+        )
+
         save_result_row(row, all_cols, csv_file)
-        embeddings[crop_status] = embedding_info
+
+    # append embedding to json
+    print(type(embedding_list))
+    if verbose:
+        print(
+            f" - Saving embedding for {len(embedding_list)} crops to {image_path.replace('.jpg', '.json')}"
+        )
+    save_embedding(embedding_list, image_path, verbose=verbose)
 
     if skipped:
         row = get_default_row(
@@ -1030,14 +782,12 @@ def perform_inf(
             image_dt,
             bucket_name,
             current_dt,
-            bluriness,
-            "No detections",
+            recording_session,
+            image_bluriness,
+            "No detections for this image.",
             all_cols,
         )
         save_result_row(row, all_cols, csv_file)
-        save_embedding({}, image_path, verbose)
-    else:
-        save_embedding(embeddings, image_path, verbose)
 
 
 def download_and_analyse(
