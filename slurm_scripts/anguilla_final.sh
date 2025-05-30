@@ -3,20 +3,17 @@
 source ~/miniforge3/bin/activate
 conda activate "~/conda_envs/flatbug/"
 
-json_directory="./keys/panama_final"
-region="pan"
-output_base_dir="/gws/nopw/j04/ceh_generic/kgoldmann/panama_inferences"
+json_directory="./keys/anguilla_final"
+region="aia"
+output_base_dir="/gws/nopw/j04/ceh_generic/kgoldmann/anguilla_inferences_tracking"
 credentials_file="./credentials.json"
 
 mkdir -p "${output_base_dir}"
 mkdir -p "${json_directory}"
 
-# array of strings dep000017-22 and dep000083-92
+# array of strings dep000099 to dep000100
 dep_files=()
-for i in {17..22}; do
-  dep_files+=("dep$(printf '%06d' $i)")
-done
-for i in {83..92}; do
+for i in {99..100}; do
   dep_files+=("dep$(printf '%06d' $i)")
 done
 
@@ -68,8 +65,8 @@ output_base_dir="$output_base_dir",\
 deployment_id="$deployment_id",\
 region="$region",\
 credentials_file="$credentials_file",\
-species_model="./models/panama_moth-model_v01_resnet50_2023-01-24-09-51.pt",\
-species_labels="./models/panama_moth-category-map_24Jan2023.json" \
+species_model="./models/turing-anguilla_v01_resnet50_2024-11-19-19-17_state.pt",\
+species_labels="./models/02_anguilla_data_category_map.json" \
   ./slurm_scripts/array_processor.sh
 
 done
