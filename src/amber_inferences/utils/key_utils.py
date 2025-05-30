@@ -2,6 +2,7 @@ import json
 import os
 import pandas as pd
 from math import ceil
+from datetime import datetime
 
 
 def list_s3_keys(s3_client, bucket_name, deployment_id="", subdir=None):
@@ -48,6 +49,17 @@ def list_s3_keys(s3_client, bucket_name, deployment_id="", subdir=None):
     return keys
 
 
+def process_date(image_path):
+    image_dt = os.path.basename(image_path).split("-")
+    try:
+        image_dt = [x for x in image_dt if x.startswith(("202", "201"))][0]
+        image_dt = datetime.strptime(image_dt, "%Y%m%d%H%M%S")
+    except Exception:
+        print(f"Error processing date from image path: {image_path}")
+        return ""
+    return image_dt
+
+
 def save_keys(
     s3_client,
     bucket,
@@ -76,9 +88,11 @@ def save_keys(
     # sort by session date
     df_json = pd.DataFrame(keys, columns=["filename"])
     df_json["datetime"] = df_json["filename"].apply(
-        lambda x: x.split("/")[2].replace("-snapshot.jpg", "")
+        lambda x: x.split("/")[-1].replace("-snapshot.jpg", "")
     )
-    df_json["datetime"] = pd.to_datetime(df_json["datetime"], format="%Y%m%d%H%M%S")
+
+    df_json["datetime"] = df_json["datetime"].apply(lambda x: process_date(x))
+    df_json = df_json[df_json["datetime"] != ""]
 
     # if the time is < 12, add 24 hours to the date
     df_json["session"] = df_json["datetime"]

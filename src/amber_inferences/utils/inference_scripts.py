@@ -190,7 +190,7 @@ def crop_image_only(
     # extract the datetime from the image path
     # take whichever split starts with 202
     image_dt = os.path.basename(image_path).split("-")
-    image_dt = [x for x in image_dt if x.startswith("202")][0]
+    image_dt = [x for x in image_dt if x.startswith(("202", "201"))][0]
     image_dt = datetime.strptime(image_dt, "%Y%m%d%H%M%S")
     image_dt = datetime.strftime(image_dt, "%Y-%m-%d %H:%M:%S")
 
@@ -448,7 +448,7 @@ def download_image_from_key(s3_client, key, bucket, output_dir):
 def get_image_metadata(path):
     try:
         dt_string = [
-            x for x in os.path.basename(path).split("-") if x.startswith("202")
+            x for x in os.path.basename(path).split("-") if x.startswith(("202", "201"))
         ][0]
         image_dt = datetime.strptime(dt_string, "%Y%m%d%H%M%S").strftime(
             "%Y-%m-%d %H:%M:%S"
