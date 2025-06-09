@@ -197,10 +197,26 @@ If you are using Slurm, there are several examples scripts for running the infer
 squeue -u USERNAME -o "%.18i %.9P %.20j %.8u %.2t %.10M %.6D %R"
 ```
 
+To check on the number of output files (replace . with the path to your output directory):
+
+```sh
+find . -maxdepth 1 -mindepth 1 -type d -exec sh -c 'echo "{} : $(find "{}" -type f | wc -l)" file\(s\)' \;
+```
+Or to check the logs:
+
+```
+head ./logs/cri/dep000031_batch_1.out
+```
 
 # For Developers
 
 
 ```sh
 python3 -m unittest discover -s tests
+```
+
+For coverage:
+
+```sh
+pytest --cov=src/amber_inferences tests/
 ```

@@ -5,7 +5,7 @@ conda activate "~/conda_envs/flatbug/"
 
 json_directory="./keys/thailand_final"
 region="tha"
-output_base_dir="./data/thailand_inferences"
+output_base_dir="/gws/nopw/j04/ceh_generic/kgoldmann/thailand_inferences"
 credentials_file="./credentials.json"
 
 mkdir -p "${output_base_dir}"

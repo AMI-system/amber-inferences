@@ -5,7 +5,7 @@ conda activate "~/conda_envs/flatbug/"
 
 json_directory="./keys/kenya_final"
 region="ken"
-output_base_dir="./data/kenya_inferences"
+output_base_dir="/gws/nopw/j04/ceh_generic/kgoldmann/kenya_inferences"
 credentials_file="./credentials.json"
 
 mkdir -p "${output_base_dir}"
@@ -17,11 +17,11 @@ for i in {94..96}; do
   dep_files+=("dep$(printf '%06d' $i)")
 done
 
-# create the key files, only needs to run once
-for dep in "${dep_files[@]}"; do
-  echo $dep
-  amber-keys --bucket $region --deployment_id $dep --output_file "${json_directory}/${dep}.json"
-done
+# # create the key files, only needs to run once
+# for dep in "${dep_files[@]}"; do
+#   echo $dep
+#   amber-keys --bucket $region --deployment_id $dep --output_file "${json_directory}/${dep}.json"
+# done
 
 # for each json file/deployment, create a slurm job
 for json_file in ${json_directory}/dep*.json; do
@@ -65,7 +65,7 @@ deployment_id="$deployment_id",\
 region="$region",\
 credentials_file="$credentials_file",\
 species_model="./models/turing-kenya-uganda_v01_resnet50_2024-11-19-18-44_state.pt",\
-species_labels="./models/02_kenya_data_category_map.json",\
+species_labels="./models/01_kenya-uganda_data_category_map.json",\
 batch_size=$batch_size \
   ./slurm_scripts/array_processor.sh
 

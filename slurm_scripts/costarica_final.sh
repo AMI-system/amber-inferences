@@ -5,7 +5,7 @@ conda activate "~/conda_envs/flatbug/"
 
 json_directory="./keys/costarica_final"
 region="cri"
-output_base_dir="./data/costarica_inferences"
+output_base_dir="/gws/nopw/j04/ceh_generic/kgoldmann/costarica_inferences"
 credentials_file="./credentials.json"
 
 mkdir -p "${output_base_dir}"
@@ -53,6 +53,7 @@ for json_file in ${json_directory}/dep*.json; do
   # Call the sbatch script for deployment using batches for arrays
   sbatch --job-name="${region}_${deployment_id}" \
     --gres gpu:1 \
+    --qos orchid \
     --partition orchid \
     --account orchid \
     --mem 8G \

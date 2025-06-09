@@ -27,6 +27,10 @@ def get_deployments(username, password):
         return response.json()
     except requests.exceptions.HTTPError as err:
         print(f"HTTP Error: {err}")
+        if response.status_code == 404:
+            print(
+                "App not available. Check at https://connect-apps.ceh.ac.uk/ami-data-upload/"
+            )
         if response.status_code == 401:
             print("Wrong username or password. Try again!")
         sys.exit(1)
@@ -68,8 +72,8 @@ def count_files(s3_client, bucket_name, prefix):
         else:
             break
 
-        image_count = len([x for x in keys if x.endswith(".jpg")])
-        audio_count = len([x for x in keys if x.endswith(".wav")])
+    image_count = len([x for x in keys if x.endswith(".jpg")])
+    audio_count = len([x for x in keys if x.endswith(".wav")])
 
     return {"keys": keys, "image_count": image_count, "audio_count": audio_count}
 
@@ -206,18 +210,17 @@ def print_deployments(
             dep_info = [x for x in country_depl if x["deployment_id"] == dep][0]
             print(
                 f"\033[1m - Deployment ID: {dep_info['deployment_id']}"
-                + f", Name: {dep_info['location_name']}"
-                + f", Deployment Key: '{dep_info['location_name']} - {dep_info['camera_id']}'\033[0m"
+                + f", Name: {dep_info['location_name']}\033[0m"
             )
-            print(
-                f"   Location ID: {dep_info['location_id']}"
-                + f", Country code: {dep_info['country_code'].lower()}"
-                + f", Latitute: {dep_info['lat']}"
-                + f", Longitute: {dep_info['lon']}"
-                + f", Camera ID: {dep_info['camera_id']}"
-                + f", System ID: {dep_info['system_id']}"
-                + f", Status: {dep_info['status']}"
-            )
+            # print(
+            #     f"   Location ID: {dep_info['location_id']}"
+            #     + f", Country code: {dep_info['country_code'].lower()}"
+            #     + f", Latitute: {dep_info['lat']}"
+            #     + f", Longitute: {dep_info['lon']}"
+            #     + f", Camera ID: {dep_info['camera_id']}"
+            #     + f", System ID: {dep_info['system_id']}"
+            #     + f", Status: {dep_info['status']}"
+            # )
 
             # get the number of images for this deployment
             prefix = f"{dep_info['deployment_id']}/snapshot_images"
@@ -225,6 +228,7 @@ def print_deployments(
 
             if print_file_count:
                 counts = count_files(s3_client, bucket_name, prefix)
+                print(counts)
                 total_images = total_images + counts["image_count"]
                 total_audio = total_audio + counts["audio_count"]
                 print(
@@ -235,6 +239,9 @@ def print_deployments(
         if print_file_count:
             print(
                 f"\033[1m - {country} has {total_images}\033[0m images total\033[0m\n"
+            )
+            print(
+                f"\033[1m - {country} has {total_audio}\033[0m audio files total\033[0m\n"
             )
 
 
