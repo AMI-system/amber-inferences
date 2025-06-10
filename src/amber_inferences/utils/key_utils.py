@@ -49,13 +49,17 @@ def list_s3_keys(s3_client, bucket_name, deployment_id="", subdir=None):
     return keys
 
 
-def process_date(image_path):
+def process_date(image_path, deployment_id):
     image_dt = os.path.basename(image_path).split("-")
     try:
         image_dt = [x for x in image_dt if x.startswith(("202", "201"))][0]
         image_dt = datetime.strptime(image_dt, "%Y%m%d%H%M%S")
     except Exception:
         print(f"Error processing date from image path: {image_path}")
+        # write to log file
+        with open(f"{deployment_id}_error_log.txt", "a") as log_file:
+            log_file.write(f"Error processing date from image path: {image_path}\n")
+
         return ""
     return image_dt
 
@@ -91,7 +95,9 @@ def save_keys(
         lambda x: x.split("/")[-1].replace("-snapshot.jpg", "")
     )
 
-    df_json["datetime"] = df_json["datetime"].apply(lambda x: process_date(x))
+    df_json["datetime"] = df_json["datetime"].apply(
+        lambda x: process_date(x, deployment_id)
+    )
     df_json = df_json[df_json["datetime"] != ""]
 
     # if the time is < 12, add 24 hours to the date

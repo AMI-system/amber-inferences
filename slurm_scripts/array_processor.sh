@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --time=04:00:00
+#SBATCH --time=10:00:00
 
 echo "Job name: ${SLURM_JOB_NAME}"
 echo "Job ID: ${SLURM_ARRAY_JOB_ID}"

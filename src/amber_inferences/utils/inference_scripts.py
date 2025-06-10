@@ -712,12 +712,14 @@ def perform_inf(
             best_matches = pd.DataFrame(
                 {
                     "previous_image": [previous_image],
-                    "best_match_crop": [""],
-                    "cnn_cost": [0],
-                    "iou_cost": [0],
-                    "box_ratio_cost": [0],
-                    "dist_ratio_cost": [0],
-                    "total_cost": [0],
+                    "best_match_crop": [
+                        "No crops from previous image. Tracking not possible."
+                    ],
+                    "cnn_cost": [""],
+                    "iou_cost": [""],
+                    "box_ratio_cost": [""],
+                    "dist_ratio_cost": [""],
+                    "total_cost": [""],
                 },
                 columns=[
                     "previous_image",
@@ -769,7 +771,6 @@ def perform_inf(
         save_result_row(row, all_cols, csv_file)
 
     # append embedding to json
-    print(type(embedding_list))
     if verbose:
         print(
             f" - Saving embedding for {len(embedding_list)} crops to {image_path.replace('.jpg', '.json')}"

@@ -44,11 +44,6 @@ for json_file in ${json_directory}/dep*.json; do
 
   echo "Number of sessions: $num_chunks"
 
-  if [ -z "$num_chunks" ] || ! [[ "$num_chunks" =~ ^[0-9]+$ ]]; then
-    echo "Error: Invalid number of chunks for $json_file"
-    continue
-  fi
-
   # Call the sbatch script for deployment using batches for arrays
   sbatch --job-name="${region}_${deployment_id}" \
     --gres gpu:1 \
@@ -68,5 +63,7 @@ credentials_file="$credentials_file",\
 species_model="./models/turing-costarica_v03_resnet50_2024-06-04-16-17_state.pt",\
 species_labels="./models/03_costarica_data_category_map.json" \
   ./slurm_scripts/array_processor.sh
+
+  echo "Submitted job for deployment: $deployment_id with ${num_chunks} chunks."
 
 done

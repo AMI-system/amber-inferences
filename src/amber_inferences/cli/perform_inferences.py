@@ -65,7 +65,13 @@ def main(
         already_processed = pd.read_csv(csv_file)
         csv_keys = already_processed["image_path"].tolist()
         csv_keys = [os.path.basename(key) for key in csv_keys]
-        keys = [key for key in keys if os.path.basename(key) not in csv_keys]
+
+        # order already processed keys by the last modified time
+        csv_keys = sorted(csv_keys)
+
+        # using csv_keys[:-1] to rerun the last image to capture the embedding
+        keys = [key for key in keys if os.path.basename(key) not in csv_keys[:-1]]
+        keys = sorted(keys)
 
         if len(csv_keys) > 0 and verbose:
             print(
