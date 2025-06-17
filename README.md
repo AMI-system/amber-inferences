@@ -32,11 +32,12 @@ AMBER team members can find these files on [OneDrive](https://thealanturininstit
 
 There are several object detection models which can be used in this analysis. These have varying recommended confidence thresholds to define object bounding boxes. The box threshold can be altered using the `--box_threshold` argument in `04_process_chunks.py`. The table below outlines the recommended thresholds for some models:
 
-| Model file name                                   | Recommended box threshold |
-|---------------------------------------------------|---------------------------|
-| v1_localizmodel_2021-08-17-12-06.pt **(Default)** | 0.99 **(Default)**        |
-| fasterrcnn_resnet50_fpn_tz53qv9v.pt               | 0.8                       |
-| flatbug_*.pt                                      | 0.0                       |
+| Model file name                      | Recommended box threshold |
+|--------------------------------------|---------------------------|
+| flatbug_*.pt  **(Default)**          | 0.0          |
+| v1_localizmodel_2021-08-17-12-06.pt  | 0.99         |
+| fasterrcnn_resnet50_fpn_tz53qv9v.pt  | 0.8          |
+
 
 
 
