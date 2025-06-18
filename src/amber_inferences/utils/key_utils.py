@@ -49,19 +49,33 @@ def list_s3_keys(s3_client, bucket_name, deployment_id="", subdir=None):
     return keys
 
 
-def process_date(image_path, deployment_id):
+def process_date(image_path, deployment_id, error_log_dir):
     image_dt = os.path.basename(image_path).split("-")
-    try:
-        image_dt = [x for x in image_dt if x.startswith(("202", "201"))][0]
-        image_dt = datetime.strptime(image_dt, "%Y%m%d%H%M%S")
-    except Exception:
-        print(f"Error processing date from image path: {image_path}")
-        # write to log file
-        with open(f"{deployment_id}_error_log.txt", "a") as log_file:
-            log_file.write(f"Error processing date from image path: {image_path}\n")
+    image_dt = [x.split(".")[0] for x in image_dt]
+    image_dt = [x for x in image_dt if x.startswith(("202", "201"))]
+    log_file_path = os.path.join(error_log_dir, f"{deployment_id}_error_log.txt")
 
+    try:
+        image_datetime = datetime.strptime(image_dt[0], "%Y%m%d%H%M%S")
+
+        if len(image_dt) > 1:
+            # take the first date-like string in the list and provide a warning
+            print(
+                f"Multiple dates found in image path: {image_path}. Using the first date."
+            )
+            image_dt = datetime.strptime(image_dt[0], "%Y%m%d%H%M%S")
+            with open(log_file_path, "a") as log_file:
+                log_file.write(
+                    f"Multiple dates found in image path: {image_path} (Using the first date)\n"
+                )
+
+    except (ValueError, IndexError) as e:
+        print(f"No valid date found in image path: {image_path}, Error: {e}")
+        with open(log_file_path, "a") as log_file:
+            log_file.write(f"No valid date found in image path: {image_path}\n")
         return ""
-    return image_dt
+
+    return image_datetime
 
 
 def save_keys(
@@ -96,7 +110,7 @@ def save_keys(
     )
 
     df_json["datetime"] = df_json["datetime"].apply(
-        lambda x: process_date(x, deployment_id)
+        lambda x: process_date(x, deployment_id, os.path.dirname(output_file))
     )
     df_json = df_json[df_json["datetime"] != ""]
 
