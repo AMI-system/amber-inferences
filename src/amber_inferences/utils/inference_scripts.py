@@ -9,6 +9,7 @@ import torch
 import torchvision.transforms as transforms
 from PIL import Image
 import cv2
+from pathlib import Path
 from boto3.s3.transfer import TransferConfig
 from amber_inferences.utils.tracking import (
     l2_normalize,
@@ -208,9 +209,9 @@ def crop_image_only(
 
     try:
         # check if image_path viable
-        if not os.path.exists(image_path):
+        image_path = Path(image_path)
+        if not image_path.exists():
             raise FileNotFoundError(f"Image file not found: {image_path}")
-        image_path = os.path.abspath(image_path)
         image = Image.open(image_path).convert("RGB")
     except Exception as e:
         print(f"Error opening image {image_path}: {e}")
@@ -232,9 +233,9 @@ def crop_image_only(
         )
 
         df.to_csv(
-            f"{csv_file}",
+            str(csv_file),
             mode="a",
-            header=not os.path.isfile(csv_file),
+            header=not csv_file.is_file(),
             index=False,
         )
         crops_df = pd.concat([crops_df, df])
@@ -280,10 +281,8 @@ def crop_image_only(
             # if save_crops then save the cropped image
             crop_path = ""
             if save_crops:
-                crop_path = os.path.join(
-                    crop_dir,
-                    os.path.basename(image_path.replace(".jpg", f"_{crop_status}.jpg")),
-                )
+                crop_path = crop_dir / image_path.with_suffix("").name
+                crop_path = crop_path.with_name(f"{crop_path.name}_{crop_status}.jpg")
                 cropped_image.save(crop_path)
 
             # append to csv with pandas
@@ -313,9 +312,9 @@ def crop_image_only(
             )
 
             df.to_csv(
-                f"{csv_file}",
+                str(csv_file),
                 mode="a",
-                header=not os.path.isfile(csv_file),
+                header=not csv_file.is_file(),
                 index=False,
             )
             crops_df = pd.concat([crops_df, df])
@@ -342,9 +341,9 @@ def crop_image_only(
             columns=all_cols,
         )
         df.to_csv(
-            f"{csv_file}",
+            str(csv_file),
             mode="a",
-            header=not os.path.isfile(csv_file),
+            header=not csv_file.is_file(),
             index=False,
         )
         crops_df = pd.concat([crops_df, df])
@@ -363,7 +362,7 @@ def localisation_only(
     localisation_model=None,
     box_threshold=0.99,
     device=None,
-    csv_file="results.csv",
+    csv_file=Path("results.csv"),
     job_name=None,
 ):
     """
@@ -377,16 +376,14 @@ def localisation_only(
         Other args: Parameters for inference and analysis.
     """
     # Ensure output directory exists
-    os.makedirs(output_dir, exist_ok=True)
-    os.makedirs(os.path.join(output_dir, "snapshots"), exist_ok=True)
-    os.makedirs(os.path.join(output_dir, "crops"), exist_ok=True)
-
+    output_dir = Path(output_dir)
+    csv_file = Path(csv_file)
+    (output_dir / "snapshots").mkdir(parents=True, exist_ok=True)
+    (output_dir / "crops").mkdir(parents=True, exist_ok=True)
     for key in keys:
-        local_path = os.path.join(
-            os.path.join(output_dir, "snapshots"), os.path.basename(key)
-        )
+        local_path = output_dir / "snapshots" / Path(key).name
         print(f"Downloading {key} to {local_path}")
-        client.download_file(bucket_name, key, local_path, Config=transfer_config)
+        client.download_file(bucket_name, key, str(local_path), Config=transfer_config)
 
         # Perform image analysis if enabled
         print(f"Analysing {local_path}")
@@ -400,22 +397,15 @@ def localisation_only(
                 csv_file=csv_file,
                 save_crops=save_crops,
                 job_name=job_name,
+                crop_dir=output_dir / "crops" if save_crops else None,
             )
         # Remove the image if cleanup is enabled
         if remove_image:
-            os.remove(local_path)
+            local_path.unlink()
 
 
-def initialise_session(credentials_file="credentials.json"):
-    """
-    Load AWS and API credentials from a configuration file and initialise an AWS session.
-
-    Args:
-        credentials_file (str): Path to the credentials JSON file.
-
-    Returns:
-        boto3.Client: Initialised S3 client.
-    """
+def initialise_session(credentials_file=Path("credentials.json")):
+    credentials_file = Path(credentials_file)
     with open(credentials_file, encoding="utf-8") as config_file:
         aws_credentials = json.load(config_file)
     session = boto3.Session(
@@ -428,28 +418,16 @@ def initialise_session(credentials_file="credentials.json"):
 
 
 def download_image_from_key(s3_client, key, bucket, output_dir):
-    """
-    Download an image from an S3 bucket using a key.
-
-    Args:
-        s3_client (boto3.Client): Initialised S3 client.
-        key (str): S3 key to download.
-        bucket (str): S3 bucket name.
-        deployment_id (str): ID of the deployment.
-
-    Returns:
-        str: Local path to the downloaded image.
-    """
-    local_path = f"{output_dir}/{os.path.basename(key)}"
-    os.makedirs(os.path.dirname(local_path), exist_ok=True)
-    s3_client.download_file(bucket, key, local_path)
+    output_dir = Path(output_dir)
+    local_path = output_dir / Path(key).name
+    output_dir.mkdir(parents=True, exist_ok=True)
+    s3_client.download_file(bucket, key, str(local_path))
 
 
 def get_image_metadata(path):
+    path = Path(path)
     try:
-        dt_string = [
-            x for x in os.path.basename(path).split("-") if x.startswith(("202", "201"))
-        ][0]
+        dt_string = [x for x in path.name.split("-") if x.startswith(("202", "201"))][0]
         image_dt = datetime.strptime(dt_string, "%Y%m%d%H%M%S").strftime(
             "%Y-%m-%d %H:%M:%S"
         )
@@ -466,8 +444,9 @@ def get_image_metadata(path):
 
 
 def load_image(path):
+    path = Path(path)
     try:
-        if not os.path.exists(path):
+        if not path.exists():
             raise FileNotFoundError(f"Image file not found: {path}")
         return Image.open(path).convert("RGB")
     except Exception as e:
@@ -487,7 +466,8 @@ def convert_ndarrays(obj):
 
 
 def save_embedding(data, image_path, verbose=False):
-    json_output_file = image_path.replace(".jpg", ".json")
+    image_path = Path(image_path)
+    json_output_file = image_path.with_suffix(".json")
     if verbose:
         print(f" - Saving embedding to {json_output_file}")
 
@@ -496,8 +476,9 @@ def save_embedding(data, image_path, verbose=False):
 
 
 def save_result_row(data, columns, csv_file):
+    csv_file = Path(csv_file)
     df = pd.DataFrame([data], columns=columns)
-    df.to_csv(csv_file, mode="a", header=not os.path.isfile(csv_file), index=False)
+    df.to_csv(csv_file, mode="a", header=not csv_file.is_file(), index=False)
 
 
 def get_default_row(
@@ -522,10 +503,11 @@ def get_default_row(
 
 
 def get_previous_embedding(previous_image, verbose=False):
-    if previous_image is not None and os.path.isfile(
-        previous_image.replace(".jpg", ".json")
+    if (
+        previous_image is not None
+        and Path(previous_image).with_suffix(".json").is_file()
     ):
-        with open(previous_image.replace(".jpg", ".json"), "r") as f:
+        with open(str(Path(previous_image).with_suffix(".json")), "r") as f:
             previous_image_embedding = json.load(f)
     else:
         print(f" - No previous image embedding found for {previous_image}.")
@@ -558,13 +540,8 @@ def perform_inf(
     verbose=False,
     previous_image=None,
 ):
-    """
-    Perform inferences on an image including:
-    - object detection (localisation)
-    - binary classification
-    - order classification
-    - species classification
-    """
+    image_path = Path(image_path)
+    csv_file = Path(csv_file)
 
     transform_species = transforms.Compose(
         [
@@ -693,7 +670,7 @@ def perform_inf(
 
         crop_path = ""
         if save_crops:
-            crop_path = image_path.replace(".jpg", f"_{crop_status}.jpg")
+            crop_path = image_path.with_name(f"{image_path.stem}_{crop_status}.jpg")
             cropped_image.save(crop_path)
 
         # tracking
@@ -809,26 +786,18 @@ def download_and_analyse(
     device=None,
     order_data_thresholds=None,
     top_n=5,
-    csv_file="results.csv",
+    csv_file=Path("results.csv"),
     verbose=False,
 ):
-    """
-    Download images from S3 and perform analysis.
-
-    Args:
-        keys (list): List of S3 keys to process.
-        output_dir (str): Directory to save downloaded files and results.
-        bucket_name (str): S3 bucket name.
-        client (boto3.Client): Initialised S3 client.
-        Other args: Parameters for inference and analysis.
-    """
+    output_dir = Path(output_dir)
+    csv_file = Path(csv_file)
     if verbose:
         print("Analysing images:")
 
     previous_image = None
     for key in keys:
         download_image_from_key(client, key, bucket_name, output_dir)
-        local_path = os.path.join(output_dir, os.path.basename(key))
+        local_path = output_dir / Path(key).name
 
         # Perform image analysis if enabled
         if perform_inference:
@@ -850,14 +819,10 @@ def download_and_analyse(
                 verbose=verbose,
                 previous_image=previous_image,
             )
-
             if previous_image is not None:
-                if os.path.isfile(previous_image.replace(".jpg", ".json")):
-                    os.remove(previous_image.replace(".jpg", ".json"))
-
-        # update the previous image path
+                prev_json = Path(previous_image).with_suffix(".json")
+                if prev_json.is_file():
+                    prev_json.unlink()
         previous_image = local_path
-
-        # Remove the image if cleanup is enabled
         if remove_image:
-            os.remove(local_path)
+            local_path.unlink()

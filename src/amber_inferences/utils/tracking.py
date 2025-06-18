@@ -291,7 +291,7 @@ def track_id_calc(best_matches, cost_threshold=1, col_palette="tab20"):
     num_tracks = output_df["track_id"].nunique()
 
     # Use a colormap to get visually distinct colors
-    cmap = plt.cm.get_cmap(col_palette, num_tracks)  # tab20
+    cmap = plt.get_cmap(col_palette, num_tracks)
 
     # Map track_id to hex colors
     track_id_to_color = {
