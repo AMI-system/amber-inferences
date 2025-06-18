@@ -3,25 +3,25 @@
 source ~/miniforge3/bin/activate
 conda activate "~/conda_envs/flatbug/"
 
-json_directory="./keys/costarica_final"
-region="cri"
-output_base_dir="/gws/nopw/j04/ceh_generic/kgoldmann/costarica_inferences_tracking"
+json_directory="./keys/anguilla_final"
+region="aia"
+output_base_dir="/gws/nopw/j04/ceh_generic/kgoldmann/anguilla_inferences_tracking"
 credentials_file="./credentials.json"
 
 mkdir -p "${output_base_dir}"
 mkdir -p "${json_directory}"
 
-# array of strings dep000031 to dep000040
+# array of strings dep000099 to dep000100
 dep_files=()
-for i in {31..40}; do
+for i in {99..100}; do
   dep_files+=("dep$(printf '%06d' $i)")
 done
 
-# # create the key files, only needs to run once
-# for dep in "${dep_files[@]}"; do
-#   echo $dep
-#   amber-keys --bucket $region --deployment_id $dep --output_file "${json_directory}/${dep}.json"
-# done
+# create the key files, only needs to run once
+for dep in "${dep_files[@]}"; do
+  echo $dep
+  amber-keys --bucket $region --deployment_id $dep --output_file "${json_directory}/${dep}.json"
+done
 
 # for each json file/deployment, create a slurm job
 for json_file in ${json_directory}/dep*.json; do
@@ -44,6 +44,11 @@ for json_file in ${json_directory}/dep*.json; do
 
   echo "Number of sessions: $num_chunks"
 
+  if [ -z "$num_chunks" ] || ! [[ "$num_chunks" =~ ^[0-9]+$ ]]; then
+    echo "Error: Invalid number of chunks for $json_file"
+    continue
+  fi
+
   # Call the sbatch script for deployment using batches for arrays
   sbatch --job-name="${region}_${deployment_id}" \
     --gres gpu:1 \
@@ -60,10 +65,8 @@ output_base_dir="$output_base_dir",\
 deployment_id="$deployment_id",\
 region="$region",\
 credentials_file="$credentials_file",\
-species_model="./models/turing-costarica_v03_resnet50_2024-06-04-16-17_state.pt",\
-species_labels="./models/03_costarica_data_category_map.json" \
+species_model="./models/turing-anguilla_v01_resnet50_2024-11-19-19-17_state.pt",\
+species_labels="./models/02_anguilla_data_category_map.json" \
   ./slurm_scripts/array_processor.sh
-
-  echo "Submitted job for deployment: $deployment_id with ${num_chunks} chunks."
 
 done

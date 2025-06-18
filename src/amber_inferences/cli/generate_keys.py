@@ -6,13 +6,7 @@ import argparse
 import boto3
 from amber_inferences.utils.config import load_credentials
 
-from amber_inferences.utils.key_utils import (
-    list_s3_keys,
-    save_keys,
-    # load_workload,
-    # split_workload,
-    # save_chunks,
-)
+from amber_inferences.utils.key_utils import save_keys
 
 
 def main():
@@ -57,23 +51,10 @@ def main():
     print(
         f"Listing keys from bucket '{args.bucket}' with deployment '{args.deployment_id}'..."
     )
-    keys = list_s3_keys(s3_client, args.bucket, args.deployment_id)
 
-    # Save keys to the output file
-    print(f"Saving all {len(keys)} keys/records to {args.output_file}")
-    save_keys(s3_client, args.bucket, args.deployment_id, args.output_file)
-
-    # # Load the workload from the input file
-    # keys = load_workload(all_records_file, args.file_extensions)
-
-    # # Split the workload into chunks
-    # chunks = split_workload(keys, args.chunk_size)
-
-    # # Save the chunks to a JSON file
-    # save_chunks(chunks, args.output_file)
-
-    # print(f"Successfully split {len(keys)} keys into {len(chunks)} chunks.")
-    # print(f"Chunks saved to {args.output_file}")
+    save_keys(
+        s3_client, args.bucket, args.deployment_id, args.output_file, verbose=True
+    )
 
 
 if __name__ == "__main__":

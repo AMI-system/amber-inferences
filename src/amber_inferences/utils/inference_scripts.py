@@ -1,6 +1,6 @@
 import os
 import warnings
-from datetime import datetime
+from datetime import datetime, time
 import json
 import numpy as np
 import pandas as pd
@@ -10,6 +10,11 @@ import torchvision.transforms as transforms
 from PIL import Image
 import cv2
 from boto3.s3.transfer import TransferConfig
+from amber_inferences.utils.tracking import (
+    l2_normalize,
+    calculate_cost,
+    find_best_matches,
+)
 
 # ignore the pandas Future Warning
 warnings.simplefilter(action="ignore", category=FutureWarning)
@@ -96,7 +101,13 @@ def classify_species(image_tensor, regional_model, regional_category_map, top_n=
     top_n_labels = [index_to_label[idx] for idx in top_n_indices]
     top_n_scores = [predictions[idx] for idx in top_n_indices]
 
-    return top_n_labels, top_n_scores
+    # Flatten and normalize features
+    features = output.view(output.size(0), -1)  # shape: (1, N)
+    features = features.squeeze(0).cpu()  # remove batch dim, move to CPU
+    features = l2_normalize(features)  # normalize
+    features = features.detach().numpy()  # convert to numpy
+
+    return top_n_labels, top_n_scores, features
 
 
 def classify_order(image_tensor, order_model, order_labels, order_data_thresholds):
@@ -155,19 +166,13 @@ def crop_image_only(
     job_name=None,
     crop_dir=None,
 ):
-    # transform_species = transforms.Compose(
-    #     [
-    #         transforms.Resize((300, 300)),
-    #         transforms.ToTensor(),
-    #         transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5]),
-    #     ]
-    # )
 
     all_cols = [
         "image_path",
         "image_datetime",
         "bucket_name",
         "analysis_datetime",
+        "recording_session",
         "job_name",
         "image_bluriness",
         "crop_status",
@@ -185,12 +190,19 @@ def crop_image_only(
     # extract the datetime from the image path
     # take whichever split starts with 202
     image_dt = os.path.basename(image_path).split("-")
-    image_dt = [x for x in image_dt if x.startswith("202")][0]
-    image_dt = datetime.strptime(image_dt, "%Y%m%d%H%M%S%f")
+    image_dt = [x for x in image_dt if x.startswith(("202", "201"))][0]
+    image_dt = datetime.strptime(image_dt, "%Y%m%d%H%M%S")
     image_dt = datetime.strftime(image_dt, "%Y-%m-%d %H:%M:%S")
 
     current_dt = datetime.now()
     current_dt = datetime.strftime(current_dt, "%Y-%m-%d %H:%M:%S")
+
+    # if the time is after 12:00 then recording_session is current_dt, else it is the previous day
+    recording_session = image_dt.split(" ")[0]
+    if datetime.strptime(image_dt, "%Y-%m-%d %H:%M:%S").time() < time(12, 0, 0):
+        recording_session = (
+            datetime.strptime(image_dt, "%Y-%m-%d %H:%M:%S") - pd.Timedelta(days=1)
+        ).strftime("%Y-%m-%d")
 
     crops_df = pd.DataFrame(columns=all_cols)
 
@@ -210,10 +222,11 @@ def crop_image_only(
                     image_dt,
                     bucket_name,
                     current_dt,
+                    recording_session,
                     job_name,
                     "IMAGE CORRUPT",
                 ]
-                + [""] * (len(all_cols) - 6),
+                + [""] * (len(all_cols) - 7),
             ],
             columns=all_cols,
         )
@@ -281,6 +294,7 @@ def crop_image_only(
                         image_dt,
                         bucket_name,
                         current_dt,
+                        recording_session,
                         job_name,
                         image_bluriness,
                         crop_status,
@@ -318,6 +332,7 @@ def crop_image_only(
                     image_dt,
                     bucket_name,
                     current_dt,
+                    recording_session,
                     job_name,
                     image_bluriness,
                     "NO DETECTIONS FOR IMAGE",
@@ -433,13 +448,21 @@ def download_image_from_key(s3_client, key, bucket, output_dir):
 def get_image_metadata(path):
     try:
         dt_string = [
-            x for x in os.path.basename(path).split("-") if x.startswith("202")
+            x for x in os.path.basename(path).split("-") if x.startswith(("202", "201"))
         ][0]
-        return datetime.strptime(dt_string, "%Y%m%d%H%M%S%f").strftime(
+        image_dt = datetime.strptime(dt_string, "%Y%m%d%H%M%S").strftime(
             "%Y-%m-%d %H:%M:%S"
         )
+
+        # if the time is after 12:00 then recording_session is current_dt, else it is the previous day
+        recording_session = image_dt.split(" ")[0]
+        if datetime.strptime(image_dt, "%Y-%m-%d %H:%M:%S").time() < time(12, 0, 0):
+            recording_session = (
+                datetime.strptime(image_dt, "%Y-%m-%d %H:%M:%S") - pd.Timedelta(days=1)
+            ).strftime("%Y-%m-%d")
+        return image_dt, recording_session
     except Exception:
-        return ""
+        return "", ""
 
 
 def load_image(path):
@@ -452,6 +475,71 @@ def load_image(path):
         return None
 
 
+def convert_ndarrays(obj):
+    if isinstance(obj, dict):
+        return {k: convert_ndarrays(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [convert_ndarrays(i) for i in obj]
+    elif isinstance(obj, np.ndarray):
+        return obj.tolist()
+    else:
+        return obj
+
+
+def save_embedding(data, image_path, verbose=False):
+    json_output_file = image_path.replace(".jpg", ".json")
+    if verbose:
+        print(f" - Saving embedding to {json_output_file}")
+
+    with open(json_output_file, "w") as f:
+        json.dump(convert_ndarrays(data), f)
+
+
+def save_result_row(data, columns, csv_file):
+    df = pd.DataFrame([data], columns=columns)
+    df.to_csv(csv_file, mode="a", header=not os.path.isfile(csv_file), index=False)
+
+
+def get_default_row(
+    image_path,
+    image_dt,
+    bucket_name,
+    current_dt,
+    recording_session,
+    bluriness,
+    message,
+    all_cols,
+):
+    return [
+        image_path,
+        image_dt,
+        bucket_name,
+        current_dt,
+        recording_session,
+        bluriness,
+        message,
+    ] + [""] * (len(all_cols) - 7)
+
+
+def get_previous_embedding(previous_image, verbose=False):
+    if previous_image is not None and os.path.isfile(
+        previous_image.replace(".jpg", ".json")
+    ):
+        with open(previous_image.replace(".jpg", ".json"), "r") as f:
+            previous_image_embedding = json.load(f)
+    else:
+        print(f" - No previous image embedding found for {previous_image}.")
+        previous_image_embedding = {}
+
+    if verbose:
+        print(
+            f" - Found {len(previous_image_embedding)} crops from the previous image ({previous_image})."
+        )
+
+    return previous_image_embedding
+
+
+# flake8: noqa: C901
 def perform_inf(
     image_path,
     bucket_name,
@@ -468,6 +556,7 @@ def perform_inf(
     box_threshold=0.995,
     top_n=5,
     verbose=False,
+    previous_image=None,
 ):
     """
     Perform inferences on an image including:
@@ -477,17 +566,6 @@ def perform_inf(
     - species classification
     """
 
-    def save_result_row(data, columns):
-        df = pd.DataFrame([data], columns=columns)
-        df.to_csv(csv_file, mode="a", header=not os.path.isfile(csv_file), index=False)
-
-    def get_default_row(
-        image_path, image_dt, bucket_name, current_dt, bluriness, message
-    ):
-        return [image_path, image_dt, bucket_name, current_dt, bluriness, message] + [
-            ""
-        ] * (len(all_cols) - 6)
-
     transform_species = transforms.Compose(
         [
             transforms.Resize((300, 300)),
@@ -496,12 +574,16 @@ def perform_inf(
         ]
     )
 
+    # load in embedding from the previous image
+    previous_image_embedding = get_previous_embedding(previous_image, verbose)
+
     all_cols = (
         [
             "image_path",
             "image_datetime",
             "bucket_name",
             "analysis_datetime",
+            "recording_session",
             "image_bluriness",
             "crop_status",
             "crop_bluriness",
@@ -520,19 +602,37 @@ def perform_inf(
         ]
         + [f"top_{i+1}_species" for i in range(top_n)]
         + [f"top_{i+1}_confidence" for i in range(top_n)]
+        + [
+            "previous_image",
+            "best_match_crop",
+            "cnn_cost",
+            "iou_cost",
+            "box_ratio_cost",
+            "dist_ratio_cost",
+            "total_cost",
+        ]
     )
 
-    image_dt = get_image_metadata(image_path)
+    image_dt, recording_session = get_image_metadata(image_path)
     current_dt = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
     image = load_image(image_path)
     if image is None:
         save_result_row(
             get_default_row(
-                image_path, image_dt, bucket_name, current_dt, "", "Image corrupt"
+                image_path,
+                image_dt,
+                bucket_name,
+                current_dt,
+                recording_session,
+                "",
+                "Image corrupt",
+                all_cols,
             ),
             all_cols,
+            csv_file,
         )
+        save_embedding({}, image_path, verbose=verbose)
         return
 
     image_bluriness = variance_of_laplacian(np.array(image))
@@ -552,7 +652,7 @@ def perform_inf(
         print(f" - Found {len(box_coords)} box(es) in image {image_path}")
 
     skipped = True
-
+    embedding_list = {}
     for i, (x_min, y_min, x_max, y_max) in enumerate(box_coords):
         box_score = localisation_outputs["scores"][i]
         if box_score < box_threshold:
@@ -573,16 +673,64 @@ def perform_inf(
         )
 
         if class_name == "moth" or "Lepidoptera" in order_name:
-            species_names, species_confidences = classify_species(
+            species_names, species_confidences, embedding = classify_species(
                 cropped_tensor, regional_model, regional_category_map, top_n
             )
         else:
-            species_names, species_confidences = [""] * top_n, [""] * top_n
+            species_names, species_confidences, embedding = (
+                [""] * top_n,
+                [""] * top_n,
+                None,
+            )
+
+        embedding_list[crop_status] = {
+            "embedding": embedding,
+            "image_path": os.path.basename(image_path),
+            "image_size": [original_width, original_height],
+            "crop": crop_status,
+            "box": {"xmin": x_min, "ymin": y_min, "xmax": x_max, "ymax": y_max},
+        }
 
         crop_path = ""
         if save_crops:
             crop_path = image_path.replace(".jpg", f"_{crop_status}.jpg")
             cropped_image.save(crop_path)
+
+        # tracking
+        if len(previous_image_embedding) > 0:
+            crop_similarities = pd.DataFrame({})
+
+            for crop_1 in list(previous_image_embedding.keys()):
+                c_1 = previous_image_embedding[crop_1]
+                c_2 = embedding_list[crop_status]
+
+                results_df = calculate_cost(c_1, c_2)
+                crop_similarities = pd.concat([crop_similarities, results_df])
+
+            best_matches = find_best_matches(crop_similarities)
+        else:
+            best_matches = pd.DataFrame(
+                {
+                    "previous_image": [previous_image],
+                    "best_match_crop": [
+                        "No crops from previous image. Tracking not possible."
+                    ],
+                    "cnn_cost": [""],
+                    "iou_cost": [""],
+                    "box_ratio_cost": [""],
+                    "dist_ratio_cost": [""],
+                    "total_cost": [""],
+                },
+                columns=[
+                    "previous_image",
+                    "best_match_crop",
+                    "cnn_cost",
+                    "iou_cost",
+                    "box_ratio_cost",
+                    "dist_ratio_cost",
+                    "total_cost",
+                ],
+            )
 
         row = (
             [
@@ -590,6 +738,7 @@ def perform_inf(
                 image_dt,
                 bucket_name,
                 current_dt,
+                recording_session,
                 image_bluriness,
                 crop_status,
                 crop_bluriness,
@@ -608,9 +757,25 @@ def perform_inf(
             ]
             + species_names
             + species_confidences
+            + [
+                best_matches["previous_image"].values[0],
+                best_matches["best_match_crop"].values[0],
+                best_matches["cnn_cost"].values[0],
+                best_matches["iou_cost"].values[0],
+                best_matches["box_ratio_cost"].values[0],
+                best_matches["dist_ratio_cost"].values[0],
+                best_matches["total_cost"].values[0],
+            ]
         )
 
-        save_result_row(row, all_cols)
+        save_result_row(row, all_cols, csv_file)
+
+    # append embedding to json
+    if verbose:
+        print(
+            f" - Saving embedding for {len(embedding_list)} crops to {image_path.replace('.jpg', '.json')}"
+        )
+    save_embedding(embedding_list, image_path, verbose=verbose)
 
     if skipped:
         row = get_default_row(
@@ -618,10 +783,12 @@ def perform_inf(
             image_dt,
             bucket_name,
             current_dt,
+            recording_session,
             image_bluriness,
             "No detections for this image.",
+            all_cols,
         )
-        save_result_row(row, all_cols)
+        save_result_row(row, all_cols, csv_file)
 
 
 def download_and_analyse(
@@ -658,6 +825,7 @@ def download_and_analyse(
     if verbose:
         print("Analysing images:")
 
+    previous_image = None
     for key in keys:
         download_image_from_key(client, key, bucket_name, output_dir)
         local_path = os.path.join(output_dir, os.path.basename(key))
@@ -680,7 +848,16 @@ def download_and_analyse(
                 top_n=top_n,
                 save_crops=save_crops,
                 verbose=verbose,
+                previous_image=previous_image,
             )
+
+            if previous_image is not None:
+                if os.path.isfile(previous_image.replace(".jpg", ".json")):
+                    os.remove(previous_image.replace(".jpg", ".json"))
+
+        # update the previous image path
+        previous_image = local_path
+
         # Remove the image if cleanup is enabled
         if remove_image:
             os.remove(local_path)

@@ -12,7 +12,6 @@ import json
 import boto3
 import sys
 import requests
-from requests.auth import HTTPBasicAuth
 
 
 def get_deployments(username, password):
@@ -20,8 +19,8 @@ def get_deployments(username, password):
 
     try:
         url = "https://connect-apps.ceh.ac.uk/ami-data-upload/get-deployments/"
-        response = requests.get(
-            url, auth=HTTPBasicAuth(username, password), timeout=600
+        response = requests.post(
+            url, data={"username": username, "password": password}, timeout=30
         )
         response.raise_for_status()
         return response.json()
