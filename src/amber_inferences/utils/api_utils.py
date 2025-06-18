@@ -60,7 +60,8 @@ def count_files(s3_client, bucket_name, prefix):
     }
 
 
-def deployments_summary(
+# TODO archive this function properly
+def deployments_summary_archive(
     aws_credentials,
     include_inactive=False,
     subset_countries=None,
@@ -68,7 +69,11 @@ def deployments_summary(
     summary_subdir="snapshot_images",
     include_image_count=True,
 ):
-    """Print information about deployments from the API."""
+    """
+    Print information about deployments from the API.
+    This function is covered in deployment_summary
+    """
+
     # Setup boto3 session
     session = boto3.Session(
         aws_access_key_id=aws_credentials["AWS_ACCESS_KEY_ID"],

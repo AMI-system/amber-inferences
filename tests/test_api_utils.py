@@ -82,7 +82,10 @@ def test_count_files():
 
 
 def test_deployments_summary(monkeypatch):
-    """Test that deployments_summary returns a summary of deployments."""
+    """
+    Test that deployments_summary returns a summary of deployments.
+    This function is actually covered in deployment_summary.py, so no longer needed
+    """
     aws_credentials = {
         "AWS_ACCESS_KEY_ID": "id",
         "AWS_SECRET_ACCESS_KEY": "secret",
@@ -119,6 +122,6 @@ def test_deployments_summary(monkeypatch):
             return mock.Mock()
 
     monkeypatch.setattr(api_utils.boto3, "Session", lambda **kwargs: FakeSession())
-    result = api_utils.deployments_summary(aws_credentials)
+    result = api_utils.deployments_summary_archive(aws_credentials)
     assert "d1" in result
     assert result["d1"]["file_types"]["image_count"] == 1
