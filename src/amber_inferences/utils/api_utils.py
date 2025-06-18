@@ -91,17 +91,14 @@ def deployments_summary(
         subset_countries = [x.title() for x in subset_countries]
         all_countries = [x for x in all_countries if x in subset_countries]
 
+    deployment_summary = {}
+
     for country in all_countries:
-        country_depl = [x for x in all_deployments if x["country"] == country]
+        country_depl = [x for x in all_deployments if x["country"].title() == country]
 
         if not country_depl:
             print(f"No deployments found for country: {country}")
             continue
-
-        # country_code = list(set([x["country_code"] for x in country_depl]))[0]
-        # total_images = 0
-
-        deployment_summary = {}
 
         if subset_deployments:
             country_depl = [
@@ -119,4 +116,4 @@ def deployments_summary(
 
             deployment_summary[dep_info["deployment_id"]] = dep_info
 
-        return deployment_summary
+    return deployment_summary
