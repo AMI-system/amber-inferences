@@ -168,7 +168,6 @@ def crop_image_only(
     job_name=None,
     crop_dir=None,
 ):
-
     all_cols = [
         "image_path",
         "image_datetime",
@@ -189,22 +188,10 @@ def crop_image_only(
         "cropped_image_path",
     ]
 
-    # extract the datetime from the image path
-    # take whichever split starts with 202
-    image_dt = os.path.basename(image_path).split("-")
-    image_dt = [x for x in image_dt if x.startswith(("202", "201"))][0]
-    image_dt = datetime.strptime(image_dt, "%Y%m%d%H%M%S")
-    image_dt = datetime.strftime(image_dt, "%Y-%m-%d %H:%M:%S")
-
+    # Use get_image_metadata to extract datetime and session
+    image_dt, recording_session = get_image_metadata(image_path)
     current_dt = datetime.now()
     current_dt = datetime.strftime(current_dt, "%Y-%m-%d %H:%M:%S")
-
-    # if the time is after 12:00 then recording_session is current_dt, else it is the previous day
-    recording_session = image_dt.split(" ")[0]
-    if datetime.strptime(image_dt, "%Y-%m-%d %H:%M:%S").time() < time(12, 0, 0):
-        recording_session = (
-            datetime.strptime(image_dt, "%Y-%m-%d %H:%M:%S") - pd.Timedelta(days=1)
-        ).strftime("%Y-%m-%d")
 
     crops_df = pd.DataFrame(columns=all_cols)
 
@@ -773,7 +760,7 @@ def perform_inf(
     # append embedding to json
     if verbose:
         print(
-            f" - Saving embedding for {len(embedding_list)} crops to {image_path.replace('.jpg', '.json')}"
+            f" - Saving embedding for {len(embedding_list)} crops to {image_path.with_suffix('.json')}"
         )
     save_embedding(embedding_list, image_path, verbose=verbose)
 
