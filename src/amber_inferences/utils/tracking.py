@@ -1,10 +1,3 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-
-"""
-Tracking utils for Amber Inferences
-"""
-
 import math
 import numpy as np
 from torchvision import transforms
