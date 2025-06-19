@@ -131,8 +131,9 @@ def classify_order(image_tensor, order_model, order_labels, order_data_threshold
 
 
 def variance_of_laplacian(image):
-    # compute the Laplacian of the image and then return the focus
-    # measure, which is simply the variance of the Laplacian
+    # compute the Laplacian of the image
+    # (second-order derivative, which highlights areas of rapid intensity change).
+    # higher variance means more edges/sharpness, while low variance indicates blurriness.
     return cv2.Laplacian(image, cv2.CV_64F).var()
 
 
@@ -444,8 +445,8 @@ def get_image_metadata(path):
 
 
 def load_image(path):
-    path = Path(path)
     try:
+        path = Path(path)
         if not path.exists():
             raise FileNotFoundError(f"Image file not found: {path}")
         return Image.open(path).convert("RGB")
@@ -503,14 +504,26 @@ def get_default_row(
 
 
 def get_previous_embedding(previous_image, verbose=False):
-    if (
-        previous_image is not None
-        and Path(previous_image).with_suffix(".json").is_file()
-    ):
-        with open(str(Path(previous_image).with_suffix(".json")), "r") as f:
-            previous_image_embedding = json.load(f)
-    else:
-        print(f" - No previous image embedding found for {previous_image}.")
+    try:
+        if previous_image is not None:
+            json_path = Path(previous_image).with_suffix(".json")
+            if json_path.is_file():
+                with open(str(json_path), "r") as f:
+                    try:
+                        previous_image_embedding = json.load(f)
+                    except (json.JSONDecodeError, UnicodeDecodeError) as e:
+                        print(f" - Error decoding JSON for {json_path}: {e}")
+                        previous_image_embedding = {}
+            else:
+                print(f" - No previous image embedding found for {previous_image}.")
+                previous_image_embedding = {}
+        else:
+            print(f" - No previous image embedding found for {previous_image}.")
+            previous_image_embedding = {}
+    except Exception as e:
+        print(
+            f" - Unexpected error loading previous embedding for {previous_image}: {e}"
+        )
         previous_image_embedding = {}
 
     if verbose:
@@ -521,7 +534,51 @@ def get_previous_embedding(previous_image, verbose=False):
     return previous_image_embedding
 
 
-# flake8: noqa: C901
+def _get_species_and_embedding(
+    class_name, order_name, cropped_tensor, regional_model, regional_category_map, top_n
+):
+    if class_name == "moth" or "Lepidoptera" in order_name:
+        return classify_species(
+            cropped_tensor, regional_model, regional_category_map, top_n
+        )
+    else:
+        return [""] * top_n, [""] * top_n, None
+
+
+def _get_best_matches(previous_image_embedding, crop_status, embedding_list):
+    if len(previous_image_embedding) > 0:
+        crop_similarities = pd.DataFrame({})
+        for crop_1 in list(previous_image_embedding.keys()):
+            c_1 = previous_image_embedding[crop_1]
+            c_2 = embedding_list[crop_status]
+            results_df = calculate_cost(c_1, c_2)
+            crop_similarities = pd.concat([crop_similarities, results_df])
+        return find_best_matches(crop_similarities)
+    else:
+        return pd.DataFrame(
+            {
+                "previous_image": [None],
+                "best_match_crop": [
+                    "No crops from previous image. Tracking not possible."
+                ],
+                "cnn_cost": [""],
+                "iou_cost": [""],
+                "box_ratio_cost": [""],
+                "dist_ratio_cost": [""],
+                "total_cost": [""],
+            },
+            columns=[
+                "previous_image",
+                "best_match_crop",
+                "cnn_cost",
+                "iou_cost",
+                "box_ratio_cost",
+                "dist_ratio_cost",
+                "total_cost",
+            ],
+        )
+
+
 def perform_inf(
     image_path,
     bucket_name,
@@ -649,16 +706,14 @@ def perform_inf(
             cropped_tensor, order_model, order_labels, order_data_thresholds
         )
 
-        if class_name == "moth" or "Lepidoptera" in order_name:
-            species_names, species_confidences, embedding = classify_species(
-                cropped_tensor, regional_model, regional_category_map, top_n
-            )
-        else:
-            species_names, species_confidences, embedding = (
-                [""] * top_n,
-                [""] * top_n,
-                None,
-            )
+        species_names, species_confidences, embedding = _get_species_and_embedding(
+            class_name,
+            order_name,
+            cropped_tensor,
+            regional_model,
+            regional_category_map,
+            top_n,
+        )
 
         embedding_list[crop_status] = {
             "embedding": embedding,
@@ -673,41 +728,9 @@ def perform_inf(
             crop_path = image_path.with_name(f"{image_path.stem}_{crop_status}.jpg")
             cropped_image.save(crop_path)
 
-        # tracking
-        if len(previous_image_embedding) > 0:
-            crop_similarities = pd.DataFrame({})
-
-            for crop_1 in list(previous_image_embedding.keys()):
-                c_1 = previous_image_embedding[crop_1]
-                c_2 = embedding_list[crop_status]
-
-                results_df = calculate_cost(c_1, c_2)
-                crop_similarities = pd.concat([crop_similarities, results_df])
-
-            best_matches = find_best_matches(crop_similarities)
-        else:
-            best_matches = pd.DataFrame(
-                {
-                    "previous_image": [previous_image],
-                    "best_match_crop": [
-                        "No crops from previous image. Tracking not possible."
-                    ],
-                    "cnn_cost": [""],
-                    "iou_cost": [""],
-                    "box_ratio_cost": [""],
-                    "dist_ratio_cost": [""],
-                    "total_cost": [""],
-                },
-                columns=[
-                    "previous_image",
-                    "best_match_crop",
-                    "cnn_cost",
-                    "iou_cost",
-                    "box_ratio_cost",
-                    "dist_ratio_cost",
-                    "total_cost",
-                ],
-            )
+        best_matches = _get_best_matches(
+            previous_image_embedding, crop_status, embedding_list
+        )
 
         row = (
             [
