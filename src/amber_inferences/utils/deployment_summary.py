@@ -12,7 +12,6 @@ import json
 import boto3
 import sys
 import requests
-from requests.auth import HTTPBasicAuth
 
 
 def get_deployments(username, password):
@@ -20,8 +19,8 @@ def get_deployments(username, password):
 
     try:
         url = "https://connect-apps.ceh.ac.uk/ami-data-upload/get-deployments/"
-        response = requests.get(
-            url, auth=HTTPBasicAuth(username, password), timeout=600
+        response = requests.post(
+            url, data={"username": username, "password": password}, timeout=30
         )
         response.raise_for_status()
         return response.json()
@@ -43,9 +42,6 @@ def count_files(s3_client, bucket_name, prefix):
     """
     Count number of files for a given prefix.
     """
-    # paginator = s3_client.get_paginator("list_objects_v2")
-    # operation_parameters = {"Bucket": bucket_name, "Prefix": prefix}
-    # page_iterator = paginator.paginate(**operation_parameters)
     image_count = 0
     audio_count = 0
 
@@ -125,12 +121,31 @@ def deployment_data(
 
     deployment_data = {}
     for country in all_countries:
-        country_depl = [x for x in all_deployments if x["country"] == country]
+        country_depl = [x for x in all_deployments if x["country"].title() == country]
         country_code = list(set([x["country_code"] for x in country_depl]))[0]
         all_deps = list(set([x["deployment_id"] for x in country_depl]))
 
         if subset_deployments is not None:
-            all_deps = [x for x in all_deps if x in subset_deployments]
+            # catch if subset_deployments are not in all_deps
+            subset_deployments_true = [x for x in subset_deployments if x in all_deps]
+            # print the dropped deployments
+            if len(subset_deployments_true) < len(subset_deployments):
+                dropped_deps = [
+                    x for x in subset_deployments if x not in subset_deployments_true
+                ]
+                print(
+                    (
+                        f"\033[1mWARNING: The following deployments were not found for {country}:"
+                        f" {', '.join(dropped_deps)}\033[0m"
+                    )
+                )
+
+            if not subset_deployments:
+                print(
+                    f"\033[1mWARNING: No deployments found for {country} with the specified subset.\033[0m"
+                )
+                continue
+            all_deps = [x for x in all_deps if x in subset_deployments_true]
 
         for dep in sorted(all_deps):
             dep_info = [x for x in country_depl if x["deployment_id"] == dep][0]
@@ -190,7 +205,7 @@ def print_deployments(
         all_countries = [x for x in all_countries if x in subset_countries]
 
     for country in all_countries:
-        country_depl = [x for x in all_deployments if x["country"] == country]
+        country_depl = [x for x in all_deployments if x["country"].title() == country]
         country_code = list(set([x["country_code"] for x in country_depl]))[0]
         print(
             "\n\033[1m"
@@ -212,15 +227,6 @@ def print_deployments(
                 f"\033[1m - Deployment ID: {dep_info['deployment_id']}"
                 + f", Name: {dep_info['location_name']}\033[0m"
             )
-            # print(
-            #     f"   Location ID: {dep_info['location_id']}"
-            #     + f", Country code: {dep_info['country_code'].lower()}"
-            #     + f", Latitute: {dep_info['lat']}"
-            #     + f", Longitute: {dep_info['lon']}"
-            #     + f", Camera ID: {dep_info['camera_id']}"
-            #     + f", System ID: {dep_info['system_id']}"
-            #     + f", Status: {dep_info['status']}"
-            # )
 
             # get the number of images for this deployment
             prefix = f"{dep_info['deployment_id']}/snapshot_images"

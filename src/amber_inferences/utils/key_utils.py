@@ -1,6 +1,8 @@
 import json
 import os
+import pandas as pd
 from math import ceil
+from datetime import datetime
 
 
 def list_s3_keys(s3_client, bucket_name, deployment_id="", subdir=None):
@@ -47,7 +49,43 @@ def list_s3_keys(s3_client, bucket_name, deployment_id="", subdir=None):
     return keys
 
 
-def save_keys(s3_client, bucket, deployment_id, output_file, subdir="snapshot_images"):
+def process_date(image_path, deployment_id, error_log_dir):
+    image_dt = os.path.basename(image_path).split("-")
+    image_dt = [x.split(".")[0] for x in image_dt]
+    image_dt = [x for x in image_dt if x.startswith(("202", "201"))]
+    log_file_path = os.path.join(error_log_dir, f"{deployment_id}_error_log.txt")
+
+    try:
+        image_datetime = datetime.strptime(image_dt[0], "%Y%m%d%H%M%S")
+
+        if len(image_dt) > 1:
+            # take the first date-like string in the list and provide a warning
+            print(
+                f"Multiple dates found in image path: {image_path}. Using the first date."
+            )
+            image_dt = datetime.strptime(image_dt[0], "%Y%m%d%H%M%S")
+            with open(log_file_path, "a") as log_file:
+                log_file.write(
+                    f"Multiple dates found in image path: {image_path} (Using the first date)\n"
+                )
+
+    except (ValueError, IndexError) as e:
+        print(f"No valid date found in image path: {image_path}, Error: {e}")
+        with open(log_file_path, "a") as log_file:
+            log_file.write(f"No valid date found in image path: {image_path}\n")
+        return ""
+
+    return image_datetime
+
+
+def save_keys(
+    s3_client,
+    bucket,
+    deployment_id,
+    output_file,
+    subdir="snapshot_images",
+    verbose=False,
+):
     """
     Save S3 keys to a JSON file.
 
@@ -62,8 +100,35 @@ def save_keys(s3_client, bucket, deployment_id, output_file, subdir="snapshot_im
 
     keys = list_s3_keys(s3_client, bucket, deployment_id, subdir)
 
+    # sort keys
+    keys.sort()
+
+    # sort by session date
+    df_json = pd.DataFrame(keys, columns=["filename"])
+    df_json["datetime"] = df_json["filename"].apply(
+        lambda x: x.split("/")[-1].replace("-snapshot.jpg", "")
+    )
+
+    df_json["datetime"] = df_json["datetime"].apply(
+        lambda x: process_date(x, deployment_id, os.path.dirname(output_file))
+    )
+    df_json = df_json[df_json["datetime"] != ""]
+
+    # if the time is < 12, add 24 hours to the date
+    df_json["session"] = df_json["datetime"]
+    df_json["session"] = df_json["datetime"].apply(
+        lambda x: x - pd.Timedelta(days=1) if x.hour < 12 else x
+    )
+    df_json["session"] = df_json["session"].dt.strftime("%Y-%m-%d")
+
+    sessions = df_json.groupby("session")["filename"].apply(list).to_dict()
+
+    # Save keys to the output file
+    if verbose:
+        print(f"Saving all {len(keys)} keys/records to {output_file}")
+
     with open(output_file, "w", encoding="UTF-8") as f:
-        json.dump(keys, f, indent=4)
+        json.dump(sessions, f, indent=4)
 
 
 def load_workload(input_file, file_extensions, subset_dates=None):

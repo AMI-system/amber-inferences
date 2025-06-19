@@ -5,6 +5,7 @@ import json
 import os
 import torch
 import pandas as pd
+from pathlib import Path
 
 from amber_inferences.utils.custom_models import load_models
 from amber_inferences.utils.inference_scripts import (
@@ -15,11 +16,10 @@ from amber_inferences.utils.inference_scripts import (
 
 def main(
     chunk_id,
-    batch_size,
     json_file,
     output_dir,
     bucket_name,
-    credentials_file="credentials.json",
+    credentials_file=Path("credentials.json"),
     remove_image=True,
     perform_inference=True,
     save_crops=False,
@@ -33,7 +33,7 @@ def main(
     device=None,
     order_data_thresholds=None,
     top_n=5,
-    csv_file="results.csv",
+    csv_file=Path("results.csv"),
     skip_processed=False,
     verbose=False,
 ):
@@ -47,29 +47,42 @@ def main(
         bucket_name (str): S3 bucket name.
         Other args: Parameters for download and analysis.
     """
+    json_file = Path(json_file)
+    csv_file = Path(csv_file)
+    output_dir = Path(output_dir)
+    credentials_file = Path(credentials_file)
+
     with open(json_file, "r") as f:
         chunks = json.load(f)
+    session_dates = list(chunks.keys())
 
     client = initialise_session(credentials_file)
 
     try:
-        chunk_id = int(chunk_id)
-        batch_size = int(batch_size)
-        end = (chunk_id) * (batch_size)
-        if end > len(chunks):
-            end = len(chunks)
-        keys = chunks[(chunk_id - 1) * batch_size : end]
+        chunk_id = int(chunk_id) - 1  # Convert to zero-based index
+        keys = chunks[session_dates[chunk_id]]
     except ValueError as e:
         raise ValueError(
             f"{e}: Chunk ID {chunk_id} was not indexable in {json_file} (json len={len(chunks)})."
         )
 
     # if the csv files exists, and skip_processed is set to true, then remove keys which are already in the csv
-    if os.path.exists(csv_file) and skip_processed:
+    if csv_file.exists() and skip_processed:
         already_processed = pd.read_csv(csv_file)
         csv_keys = already_processed["image_path"].tolist()
         csv_keys = [os.path.basename(key) for key in csv_keys]
+
+        # order already processed keys by the last modified time
+        csv_keys = sorted(csv_keys)
+
         keys = [key for key in keys if os.path.basename(key) not in csv_keys]
+        keys = sorted(keys)
+
+        if len(csv_keys) > 0 and verbose:
+            print(
+                f"\033[93m\033[1mSkipping {len(csv_keys)} images previously processed. "
+                + "\033[0m\033[0m"
+            )
 
     # exit if length keys is 0
     if len(keys) == 0:
@@ -78,11 +91,6 @@ def main(
             + "\N{Warning Sign}\033[0m\033[0m"
         )
         return
-    elif len(keys) < batch_size and verbose:
-        print(
-            f"\033[93m\033[1mSkipping {batch_size - len(keys)} images previously processed. "
-            + "\033[0m\033[0m"
-        )
 
     download_and_analyse(
         keys=keys,
@@ -102,7 +110,7 @@ def main(
         device=device,
         order_data_thresholds=order_data_thresholds,
         top_n=top_n,
-        csv_file=csv_file,
+        csv_file=str(csv_file),
         verbose=verbose,
     )
 
@@ -115,24 +123,24 @@ if __name__ == "__main__":
         help="ID of the chunk to process (e.g., 0, 1, 2, 3).",
     )
     parser.add_argument(
-        "--batch_size",
-        default=1000,
-        help="Batch size for chunks",
-    )
-    parser.add_argument(
-        "--json_file", required=True, help="Path to the JSON file with key chunks."
+        "--json_file",
+        required=True,
+        help="Path to the JSON file with key chunks.",
+        type=Path,
     )
     parser.add_argument(
         "--output_dir",
         required=True,
         help="Directory to save downloaded files and analysis results.",
-        default="./data/",
+        default=Path("./data/"),
+        type=Path,
     )
     parser.add_argument("--bucket_name", required=True, help="Name of the S3 bucket.")
     parser.add_argument(
         "--credentials_file",
-        default="credentials.json",
+        default=Path("credentials.json"),
         help="Path to AWS credentials file.",
+        type=Path,
     )
     parser.add_argument(
         "--remove_image", action="store_true", help="Remove images after processing."
@@ -145,7 +153,7 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--localisation_model_path",
-        type=str,
+        type=Path,
         required=True,
         help="Path to the localisation model weights.",
         default=None,
@@ -156,33 +164,34 @@ if __name__ == "__main__":
         default=0.99,
         help="Threshold for the confidence score of bounding boxes. Default: 0.99",
     )
-    # TODO: option not to run binary/species
     parser.add_argument(
         "--binary_model_path",
-        type=str,
+        type=Path,
         help="Path to the binary model weights.",
-        default="./models/moth-nonmoth-effv2b3_20220506_061527_30.pth",
+        default=Path("./models/moth-nonmoth-effv2b3_20220506_061527_30.pth"),
     )
     parser.add_argument(
         "--order_model_path",
-        type=str,
+        type=Path,
         help="Path to the order model weights.",
-        default="./models/dhc_best_128.pth",
+        default=Path("./models/dhc_best_128.pth"),
     )
     parser.add_argument(
-        "--order_labels", type=str, help="Path to the order labels file."
+        "--order_labels", type=Path, help="Path to the order labels file."
     )
     parser.add_argument(
         "--species_model_path",
-        type=str,
+        type=Path,
         help="Path to the species model weights.",
-        default="./models/turing-costarica_v03_resnet50_2024-06-04-16-17_state.pt",
+        default=Path(
+            "./models/turing-costarica_v03_resnet50_2024-06-04-16-17_state.pt"
+        ),
     )
     parser.add_argument(
         "--species_labels",
-        type=str,
+        type=Path,
         help="Path to the species labels file.",
-        default="./models/03_costarica_data_category_map.json",
+        default=Path("./models/03_costarica_data_category_map.json"),
     )
     parser.add_argument(
         "--device",
@@ -192,9 +201,9 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--order_thresholds_path",
-        type=str,
+        type=Path,
         help="Path to the order data thresholds file.",
-        default="./models/thresholdsTestTrain.csv",
+        default=Path("./models/thresholdsTestTrain.csv"),
     )
     parser.add_argument(
         "--top_n_species",
@@ -203,7 +212,10 @@ if __name__ == "__main__":
         default=5,
     )
     parser.add_argument(
-        "--csv_file", default="results.csv", help="Path to save analysis results."
+        "--csv_file",
+        default=Path("results.csv"),
+        help="Path to save analysis results.",
+        type=Path,
     )
     parser.add_argument(
         "--skip_processed",
@@ -247,28 +259,26 @@ if __name__ == "__main__":
         args.species_model_path,
         args.species_labels,
     ]:
-
-        if not os.path.exists(os.path.abspath(mod_path)):
+        if not mod_path.resolve().exists():
             raise FileNotFoundError(f"Model path not found: {mod_path}")
 
-    if not os.path.exists(os.path.abspath(args.json_file)):
+    if not args.json_file.resolve().exists():
         raise FileNotFoundError(f"JSON file not found: {args.json_file}")
 
     print("\033[94m\033[1mLoading models...\033[0m\033[0m")
     models = load_models(
         device,
-        os.path.abspath(args.localisation_model_path),
-        os.path.abspath(args.binary_model_path),
-        os.path.abspath(args.order_model_path),
-        os.path.abspath(args.order_thresholds_path),
-        os.path.abspath(args.species_model_path),
-        os.path.abspath(args.species_labels),
+        args.localisation_model_path.resolve(),
+        args.binary_model_path.resolve(),
+        args.order_model_path.resolve(),
+        args.order_thresholds_path.resolve(),
+        args.species_model_path.resolve(),
+        args.species_labels.resolve(),
         verbose=args.verbose,
     )
 
     main(
         chunk_id=args.chunk_id,
-        batch_size=args.batch_size,
         json_file=args.json_file,
         output_dir=args.output_dir,
         bucket_name=args.bucket_name,

@@ -1,5 +1,4 @@
 import requests
-from requests.auth import HTTPBasicAuth
 import sys
 import boto3
 
@@ -14,8 +13,8 @@ def get_deployments(username, password):
     """Fetch deployments from the API with authentication."""
     try:
         url = "https://connect-apps.ceh.ac.uk/ami-data-upload/get-deployments/"
-        response = requests.get(
-            url, auth=HTTPBasicAuth(username, password), timeout=600
+        response = requests.post(
+            url, data={"username": username, "password": password}, timeout=30
         )
         response.raise_for_status()
         return response.json()
@@ -61,7 +60,8 @@ def count_files(s3_client, bucket_name, prefix):
     }
 
 
-def deployments_summary(
+# TODO archive this function properly
+def deployments_summary_archive(
     aws_credentials,
     include_inactive=False,
     subset_countries=None,
@@ -69,7 +69,11 @@ def deployments_summary(
     summary_subdir="snapshot_images",
     include_image_count=True,
 ):
-    """Print information about deployments from the API."""
+    """
+    Print information about deployments from the API.
+    This function is covered in deployment_summary
+    """
+
     # Setup boto3 session
     session = boto3.Session(
         aws_access_key_id=aws_credentials["AWS_ACCESS_KEY_ID"],
@@ -92,17 +96,14 @@ def deployments_summary(
         subset_countries = [x.title() for x in subset_countries]
         all_countries = [x for x in all_countries if x in subset_countries]
 
+    deployment_summary = {}
+
     for country in all_countries:
-        country_depl = [x for x in all_deployments if x["country"] == country]
+        country_depl = [x for x in all_deployments if x["country"].title() == country]
 
         if not country_depl:
             print(f"No deployments found for country: {country}")
             continue
-
-        # country_code = list(set([x["country_code"] for x in country_depl]))[0]
-        # total_images = 0
-
-        deployment_summary = {}
 
         if subset_deployments:
             country_depl = [
@@ -120,4 +121,4 @@ def deployments_summary(
 
             deployment_summary[dep_info["deployment_id"]] = dep_info
 
-        return deployment_summary
+    return deployment_summary

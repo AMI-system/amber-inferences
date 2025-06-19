@@ -5,7 +5,7 @@ conda activate "~/conda_envs/flatbug/"
 
 json_directory="./keys/thailand_final"
 region="tha"
-output_base_dir="/gws/nopw/j04/ceh_generic/kgoldmann/thailand_inferences"
+output_base_dir="/gws/nopw/j04/ceh_generic/kgoldmann/thailand_inferences_tracking"
 credentials_file="./credentials.json"
 
 mkdir -p "${output_base_dir}"
@@ -36,37 +36,37 @@ for json_file in ${json_directory}/dep*.json; do
   echo "Deployment ID: $deployment_id"
   mkdir -p "${output_base_dir}/${deployment_id}"
 
-  num_chunks=$(wc -l $json_file | awk '{print $1-2}')
+  session_names=()
+  while IFS= read -r key; do
+    session_names+=("$key")
+  done < <(jq -r 'keys[]' $json_file)
+  num_chunks=${#session_names[@]}
 
-  echo "Number of chunks: $num_chunks"
+  echo "Number of sessions: $num_chunks"
 
   if [ -z "$num_chunks" ] || ! [[ "$num_chunks" =~ ^[0-9]+$ ]]; then
     echo "Error: Invalid number of chunks for $json_file"
     continue
   fi
 
-  # note: slurm will not accept array indices > 10,000 so we need to break
-  # the array down into manageable chunks
-  batch_size=1000
-  number_of_batches=$((num_chunks / batch_size + 1))
-
   # Call the sbatch script for deployment using batches for arrays
   sbatch --job-name="${region}_${deployment_id}" \
     --gres gpu:1 \
     --partition orchid \
+    --qos orchid \
     --account orchid \
     --mem 8G \
-    --array=1-$number_of_batches \
+    --array=1-$num_chunks \
     --output="./logs/$region/${deployment_id}_batch_%a.out" \
   --export=ALL,\
 json_file="$json_file",\
+session_names_string="${session_names[*]}",\
 output_base_dir="$output_base_dir",\
 deployment_id="$deployment_id",\
 region="$region",\
 credentials_file="$credentials_file",\
 species_model="./models/turing-thailand_v01_resnet50_2024-11-21-16-28_state.pt",\
-species_labels="./models/02_thailand_data_category_map.json",\
-batch_size=$batch_size \
+species_labels="./models/02_thailand_data_category_map.json" \
   ./slurm_scripts/array_processor.sh
 
 done

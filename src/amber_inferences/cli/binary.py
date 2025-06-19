@@ -2,74 +2,90 @@
 
 import argparse
 import json
-import os
 import random
 import torch
 import string
+from pathlib import Path
+import pandas as pd
 
 from amber_inferences.utils.custom_models import load_models
-from amber_inferences.utils.inference_scripts import binary_only, initialise_session
+from amber_inferences.utils.inference_scripts import classify_box
 
 
 def main(
     output_dir,
     binary_model=None,
-    device=None,
     crops_csv=None,
-    output_csv="results.csv",
-    job_name=None,
+    output_csv=Path("results.csv"),
 ):
     """
     Main function to process a specific chunk of S3 keys.
-
-    Args:
-        chunk_id (str): ID of the chunk to process (e.g., chunk_0).
-        json_file (str): Path to the JSON file with key chunks.
-        output_dir (str): Directory to save results.
-        bucket_name (str): S3 bucket name.
-        Other args: Parameters for download and analysis.
     """
+    output_dir = Path(output_dir)
+    crops_csv = Path(crops_csv)
+    output_csv = Path(output_csv)
 
     # read in the crops csv
     crops = pd.read_csv(crops_csv)
     # drop rows where crop_status = 'NO DETECTIONS FOR IMAGE'
-    crops = crops.loc[crops['crop_status'] != 'NO DETECTIONS FOR IMAGE', ]
+    crops = crops.loc[crops["crop_status"] != "No detections for image.",]
 
-    # for each row in the crops csv, get the image key and run the binary model
-    for index, row in crops.iterrows():
-        image_key = row['image_key']
-        image_path = os.path.join(output_dir, image_key)
+    results = []
+    for _, row in crops.iterrows():
+        image_key = row["image_key"]
+        image_path = output_dir / image_key
         # run the binary model
-        binary, confidence, dt = binary_only(image_path, binary_model, device)
+        # classify_box should return (label, confidence)
+        label, confidence = classify_box(image_path, binary_model)
+        results.append(
+            {"image_key": image_key, "label": label, "confidence": confidence}
+        )
+    # Save results to output_csv
+    if results:
+        df = pd.DataFrame(results)
+        df.to_csv(output_csv, index=False)
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Process a specific chunk of S3 keys.")
     parser.add_argument(
-        "--crops_csv", required=True, help="Path to save analysis results."
+        "--crops_csv", required=True, help="Path to crops CSV file.", type=Path
     )
     parser.add_argument(
-        "--output_csv", default="results.csv", help="Path to save analysis results."
+        "--output_csv",
+        default=Path("results.csv"),
+        help="Path to save analysis results.",
+        type=Path,
     )
     parser.add_argument(
         "--output_dir",
         required=True,
         help="Directory to save downloaded files and analysis results.",
-        default="./data/"
+        default=Path("./data/"),
+        type=Path,
     )
     parser.add_argument(
-        "--job_name", default=None, help="Unique job name. If none, one will be randomly generated"
+        "--binary_model_path",
+        required=True,
+        type=Path,
+        help="Path to the binary model weights.",
+    )
+    parser.add_argument(
+        "--job_name",
+        default=None,
+        help="Unique job name. If none, one will be randomly generated",
     )
 
     args = parser.parse_args()
     job_name = args.job_name
     if job_name is None:
-        # set as a random series of alphanumeric
-        job_name = ''.join(random.choice(f"{string.ascii_lowercase}{string.digits}") for i in range(16))
+        job_name = "".join(
+            random.choice(f"{string.ascii_lowercase}{string.digits}") for _ in range(16)
+        )
     args.job_name = job_name
 
-    print(f'Saving job info to {args.output_dir}/{job_name}_job_info.json')
-    with open(f"{args.output_dir}/{job_name}_job_info.json", "w") as f:
+    print(f"Saving job info to {args.output_dir}/{job_name}_job_info.json")
+    with open(args.output_dir / f"{job_name}_job_info.json", "w") as f:
         json.dump(vars(args), f)
 
     if torch.cuda.is_available():
@@ -85,23 +101,16 @@ if __name__ == "__main__":
             + "\N{Cross Mark}\033[0m\033[0m"
         )
 
-    # check if the model paths exist
-    if not os.path.exists(os.path.abspath(args.binary_model_path)):
+    if not args.binary_model_path.resolve().exists():
         raise FileNotFoundError(f"Model path not found: {args.binary_model_path}")
+    if not args.crops_csv.resolve().exists():
+        raise FileNotFoundError(f"Crops csv file not found: {args.crops_csv}")
 
-    if not os.path.exists(os.path.abspath(args.crops_csv)):
-            raise FileNotFoundError(f"Crops csv file not found: {args.crops_csv}")
-
-
-    models = load_models(
-        device,
-        binary_model_path=os.path.abspath(args.binary_model_path)
-    )
+    models = load_models(device, binary_model_path=args.binary_model_path.resolve())
 
     main(
         output_dir=args.output_dir,
-        binary_model=models['binary_model'],
-        device=device,
+        binary_model=models["classification_model"],
         crops_csv=args.crops_csv,
         output_csv=args.output_csv,
         job_name=args.job_name,

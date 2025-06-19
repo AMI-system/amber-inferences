@@ -1,21 +1,17 @@
 #!/usr/bin/env python3
 
 import argparse
-
-# import os
 import boto3
 from amber_inferences.utils.config import load_credentials
-
-from amber_inferences.utils.key_utils import (
-    list_s3_keys,
-    save_keys,
-    # load_workload,
-    # split_workload,
-    # save_chunks,
-)
+from amber_inferences.utils.key_utils import save_keys
 
 
 def main():
+    """
+    Main function to generate a file containing S3 keys from a specified bucket.
+    It lists all keys in the bucket, optionally filtered by deployment ID and file extensions,
+    and saves them to an output file.
+    """
     parser = argparse.ArgumentParser(
         description="Generate a file containing S3 keys from a bucket."
     )
@@ -57,42 +53,11 @@ def main():
     print(
         f"Listing keys from bucket '{args.bucket}' with deployment '{args.deployment_id}'..."
     )
-    keys = list_s3_keys(s3_client, args.bucket, args.deployment_id)
 
-    # Save keys to the output file
-    print(f"Saving all {len(keys)} keys/records to {args.output_file}")
-    save_keys(s3_client, args.bucket, args.deployment_id, args.output_file)
-
-    # # Load the workload from the input file
-    # keys = load_workload(all_records_file, args.file_extensions)
-
-    # # Split the workload into chunks
-    # chunks = split_workload(keys, args.chunk_size)
-
-    # # Save the chunks to a JSON file
-    # save_chunks(chunks, args.output_file)
-
-    # print(f"Successfully split {len(keys)} keys into {len(chunks)} chunks.")
-    # print(f"Chunks saved to {args.output_file}")
+    save_keys(
+        s3_client, args.bucket, args.deployment_id, args.output_file, verbose=True
+    )
 
 
 if __name__ == "__main__":
     main()
-
-    # parser = argparse.ArgumentParser(
-    #     description="Save image files from S3 workload into file."
-    # )
-    # parser.add_argument(
-    #     "--input_file",
-    #     type=str,
-    #     required=True,
-    #     help="Path to file containing S3 keys, one per line.",
-    # )
-
-    # parser.add_argument(
-    #     "--output_file",
-    #     type=str,
-    #     required=True,
-    #     help="Path to save the output JSON file.",
-    # )
-    # args = parser.parse_args()
