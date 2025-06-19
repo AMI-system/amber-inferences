@@ -15,10 +15,8 @@ from amber_inferences.utils.inference_scripts import classify_box
 def main(
     output_dir,
     binary_model=None,
-    device=None,
     crops_csv=None,
     output_csv=Path("results.csv"),
-    job_name=None,
 ):
     """
     Main function to process a specific chunk of S3 keys.
@@ -30,7 +28,7 @@ def main(
     # read in the crops csv
     crops = pd.read_csv(crops_csv)
     # drop rows where crop_status = 'NO DETECTIONS FOR IMAGE'
-    crops = crops.loc[crops["crop_status"] != "NO DETECTIONS FOR IMAGE",]
+    crops = crops.loc[crops["crop_status"] != "No detections for image.",]
 
     results = []
     for _, row in crops.iterrows():
@@ -113,7 +111,6 @@ if __name__ == "__main__":
     main(
         output_dir=args.output_dir,
         binary_model=models["classification_model"],
-        device=device,
         crops_csv=args.crops_csv,
         output_csv=args.output_csv,
         job_name=args.job_name,
