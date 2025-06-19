@@ -75,8 +75,7 @@ def main(
         # order already processed keys by the last modified time
         csv_keys = sorted(csv_keys)
 
-        # using csv_keys[:-1] to rerun the last image to capture the embedding
-        keys = [key for key in keys if os.path.basename(key) not in csv_keys[:-1]]
+        keys = [key for key in keys if os.path.basename(key) not in csv_keys]
         keys = sorted(keys)
 
         if len(csv_keys) > 0 and verbose:
