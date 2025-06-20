@@ -212,8 +212,8 @@ def crop_image_only(
                     bucket_name,
                     current_dt,
                     recording_session,
-                    job_name,
-                    "IMAGE CORRUPT",
+                    "",  # bluriness
+                    "Image corrupt",
                 ]
                 + [""] * (len(all_cols) - 7),
             ],
@@ -320,9 +320,8 @@ def crop_image_only(
                     bucket_name,
                     current_dt,
                     recording_session,
-                    job_name,
                     image_bluriness,
-                    "NO DETECTIONS FOR IMAGE",
+                    "No detections for image.",
                 ]
                 + [""] * (len(all_cols) - 7),
             ],

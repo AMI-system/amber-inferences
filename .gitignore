@@ -192,3 +192,4 @@ logs/
 *.csv
 .DS_Store
 *.gif
+sandbox/*.json

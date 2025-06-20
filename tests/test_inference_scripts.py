@@ -9,7 +9,7 @@ import torch
 import amber_inferences.utils.inference_scripts as inference_scripts
 
 
-# Tests for variance_of_laplacian function
+# region Tests for variance_of_laplacian function
 def test_variance_of_laplacian(monkeypatch):
     class DummyCV2:
         CV_64F = 0
@@ -41,7 +41,16 @@ def test_variance_of_laplacian_blurr():
     assert result > 1e4
 
 
-# Tests for get_image_metadata
+def test_variance_of_laplacian_real(monkeypatch):
+    image = np.ones((10, 10), dtype=np.uint8)
+    result = inference_scripts.variance_of_laplacian(image)
+    assert isinstance(result, float)
+
+
+# endregion
+
+
+# region Tests for get_image_metadata function
 def test_get_image_metadata():
     path = Path("foo-20240101123456-bar.jpg")
     dt, session = inference_scripts.get_image_metadata(path)
@@ -69,7 +78,20 @@ def test_get_image_metadata_invalid():
     assert session == ""
 
 
-# Tests for load_image function
+def test_get_image_metadata_time_edge():
+    # Test time before and after noon
+    path = Path("foo-20240101115959-bar.jpg")
+    dt, session = inference_scripts.get_image_metadata(path)
+    assert session != ""
+    path2 = Path("foo-20240101125959-bar.jpg")
+    dt2, session2 = inference_scripts.get_image_metadata(path2)
+    assert session2 != ""
+
+
+# endregion
+
+
+# region Tests for load_image function
 def test_load_image_success(tmp_path):
     img_path = tmp_path / "img.jpg"
     img = Image.new("RGB", (10, 10))
@@ -102,7 +124,49 @@ def test_load_image_wrong_type():
     assert out is None
 
 
-# Tests for save_embedding function
+# endregion
+
+
+# region Tests for initialise_session function
+def test_initialise_session(tmp_path, monkeypatch):
+    creds = {
+        "AWS_ACCESS_KEY_ID": "id",
+        "AWS_SECRET_ACCESS_KEY": "secret",
+        "AWS_REGION": "region",
+        "AWS_URL_ENDPOINT": "endpoint",
+    }
+    cred_file = tmp_path / "creds.json"
+    cred_file.write_text(json.dumps(creds))
+
+    class DummySession:
+        def client(self, *a, **k):
+            return "client"
+
+    monkeypatch.setattr("boto3.Session", lambda *a, **k: DummySession())
+    client = inference_scripts.initialise_session(cred_file)
+    assert client == "client"
+
+
+# endregion
+
+
+# region Tests for download_image_from_key function
+def test_download_image_from_key(monkeypatch, tmp_path):
+    class DummyClient:
+        def download_file(self, bucket, key, path):
+            Path(path).write_text("")
+
+    output_dir = tmp_path / "out"
+    inference_scripts.download_image_from_key(
+        DummyClient(), "img1.jpg", "bucket", output_dir
+    )
+    assert (output_dir / "img1.jpg").exists()
+
+
+# endregion
+
+
+# region Tests for save_embedding function
 def test_save_embedding(tmp_path):
     img_path = tmp_path / "img.jpg"
     data = {"a": np.array([1, 2, 3])}
@@ -138,7 +202,10 @@ def test_save_embedding_verbose(tmp_path, capsys):
     assert json_path.exists()
 
 
-# Tests for save_result_row function
+# endregion
+
+
+# region Tests for save_result_row function
 def test_save_result_row(tmp_path):
     csv_file = tmp_path / "out.csv"
     data = [1, 2, 3]
@@ -146,6 +213,7 @@ def test_save_result_row(tmp_path):
     inference_scripts.save_result_row(data, columns, csv_file)
     df = pd.read_csv(csv_file)
     assert list(df.columns) == columns
+    assert len(df) == 1
 
 
 @pytest.mark.parametrize(
@@ -175,7 +243,10 @@ def test_save_result_row_multiple(tmp_path):
     assert list(df.columns) == columns
 
 
-# Tests for get_previous_embedding function
+# endregion
+
+
+# region Tests for get_previous_embedding function
 def test_get_previous_embedding(tmp_path, capsys):
     img_path = tmp_path / "img.jpg"
     json_path = img_path.with_suffix(".json")
@@ -212,7 +283,10 @@ def test_get_previous_embedding_no_json(tmp_path, capsys):
     assert out == {}
 
 
-# Tests for get_default_row function
+# endregion
+
+
+# region Tests for get_default_row function
 def test_get_default_row():
     row = inference_scripts.get_default_row(
         "img.jpg",
@@ -227,13 +301,20 @@ def test_get_default_row():
     assert len(row) == 10
 
 
-# Tests for convert_ndarrays function
+# endregion
+
+
+# region Tests for convert_ndarrays function
 def test_convert_ndarrays():
     arr = np.array([1, 2, 3])
     d = {"a": arr, "b": [arr, arr]}
     out = inference_scripts.convert_ndarrays(d)
     assert isinstance(out["a"], list)
     assert isinstance(out["b"][0], list)
+    assert isinstance(inference_scripts.convert_ndarrays(arr), list)
+    assert isinstance(inference_scripts.convert_ndarrays({"a": arr}), dict)
+    assert isinstance(inference_scripts.convert_ndarrays([arr]), list)
+    assert inference_scripts.convert_ndarrays("foo") == "foo"
 
 
 @pytest.mark.parametrize(
@@ -258,7 +339,10 @@ def test_convert_ndarrays_nested():
     assert isinstance(out["a"][1]["b"], list)
 
 
-# test crop_image_only function with various scenarios
+# endregion
+
+
+# region Tests crop_image_only function
 def test_crop_image_only_error(tmp_path):
     # Should handle missing image gracefully
     csv_file = tmp_path / "out.csv"
@@ -272,10 +356,13 @@ def test_crop_image_only_error(tmp_path):
     )
     assert result is None
     df = pd.read_csv(csv_file)
-    assert "IMAGE CORRUPT" in df.values
+    assert "Image corrupt" in df.values
 
 
-# test classify box function
+# endregion
+
+
+# region Test classify_box function (binary inference)
 def test_classify_box_param():
     class DummyModel(torch.nn.Module):
         def forward(self, x):
@@ -295,7 +382,21 @@ def test_classify_box_param():
     assert 0.0 <= score <= 1.0
 
 
-# Tests for get_default_row function with edge cases
+def test_classify_box(monkeypatch):
+    class DummyModel(torch.nn.Module):
+        def forward(self, x):
+            return torch.tensor([[0.1, 0.9]])
+
+    tensor = torch.zeros((1, 3, 300, 300))
+    label, score = inference_scripts.classify_box(tensor, DummyModel())
+    assert label in ["moth", "nonmoth"]
+    assert isinstance(score, float)
+
+
+# endregion
+
+
+# region Tests get_default_row function
 def test_get_default_row_edge():
     row = inference_scripts.get_default_row(
         "img.jpg", "", "", "", "", None, None, ["a"] * 8
@@ -303,7 +404,10 @@ def test_get_default_row_edge():
     assert len(row) == 8
 
 
-# Test the species pipeline
+# endregion
+
+
+# region Tests the species inference pipeline
 def test_classify_species():
     class DummyModel(torch.nn.Module):
         def forward(self, x):
@@ -327,16 +431,32 @@ def test_classify_species():
     assert isinstance(features, np.ndarray)
 
 
-# Test the order pipeline
+def test_classify_species_topn(monkeypatch):
+    class DummyModel(torch.nn.Module):
+        def forward(self, x):
+            return torch.tensor([[0.1, 0.9, 0.0]])
+
+    image_tensor = torch.zeros((1, 3, 300, 300))
+    regional_category_map = {"a": 0, "b": 1, "c": 2}
+    labels, scores, features = inference_scripts.classify_species(
+        image_tensor, DummyModel(), regional_category_map, top_n=3
+    )
+    assert len(labels) == 3
+    assert all(isinstance(lab, str) for lab in labels)
+    assert all(isinstance(s, np.float32) for s in scores)
+    assert isinstance(features, np.ndarray)
+
+
+# endregion
+
+
+# region Test the order pipeline
 def test_classify_order():
     class DummyModel(torch.nn.Module):
         def forward(self, x):
             return torch.tensor([[0.1, 0.9, 0.0]])
 
-    # Dummy input image tensor
     image_tensor = torch.zeros((1, 3, 300, 300))
-
-    # Dummy order labels
     order_labels = {0: "Coleoptera", 1: "Lepidoptera", 2: "Diptera"}
     order_data_thresholds = {}  # ignored in current code
 
@@ -349,7 +469,10 @@ def test_classify_order():
     assert 0.0 <= score <= 1.0
 
 
-# Test the get_boxes function with various models
+# endregion
+
+
+# region Test the get_boxes function with various models
 def test_get_boxes_flatbug(monkeypatch):
     # Mock the flatbug model and inference function
     class DummyFlatbugModel:
@@ -376,7 +499,124 @@ def test_get_boxes_flatbug(monkeypatch):
     assert "boxes" in out[0] or isinstance(out[1], list)
 
 
-# Integration Tests
+def test_get_boxes_fasterrcnn(monkeypatch):
+    class DummyModel:
+        def __init__(self):
+            self.__class__.__name__ = "FasterRCNN"
+
+        def __call__(self, x):
+            return [
+                {
+                    "boxes": [torch.tensor([0, 0, 10, 10])],
+                    "scores": [0.1],
+                    "labels": [1],
+                }
+            ]
+
+    image = Image.new("RGB", (300, 300))
+    out = inference_scripts.get_boxes(DummyModel(), image, "img.jpg", 300, 300, "cpu")
+    assert isinstance(out, list)
+    assert isinstance(out[0], dict)
+    assert isinstance(out[1], list)
+
+
+# endregion
+
+
+# region Test the flatbug model inference
+def test_flatbug(monkeypatch, tmp_path):
+    class DummyFlatbugModel:
+        def __call__(self, image_path):
+            class Output:
+                json_data = {"boxes": [[1, 2, 3, 4]], "confs": [0.9], "classes": [1]}
+
+                def plot(self, outpath):
+                    pass
+
+            return Output()
+
+    img_path = tmp_path / "img.jpg"
+    img_path.write_text("")
+    out = inference_scripts.flatbug(
+        str(img_path), DummyFlatbugModel(), save_annotation=True
+    )
+    assert "boxes" in out and "scores" in out and "labels" in out
+
+
+# endregion
+
+
+# region Test crop_image_only function
+def test_crop_image_only_all_skipped(tmp_path, monkeypatch):
+    # All boxes below threshold
+    class DummyModel:
+        def __init__(self):
+            self.__class__.__name__ = "FasterRCNN"
+
+        def __call__(self, x):
+            return [
+                {
+                    "boxes": [torch.tensor([0, 0, 10, 10])],
+                    "scores": [0.1],
+                    "labels": [1],
+                }
+            ]
+
+    img_path = tmp_path / "img.jpg"
+    img = Image.new("RGB", (10, 10))
+    img.save(img_path)
+    csv_file = tmp_path / "out.csv"
+    _ = inference_scripts.crop_image_only(
+        image_path=img_path,
+        bucket_name="bucket",
+        localisation_model=DummyModel(),
+        proc_device="cpu",
+        csv_file=csv_file,
+        save_crops=False,
+        box_threshold=0.99,
+    )
+    # check the data was output correctly and no crops detected
+    df = pd.read_csv(csv_file)
+    assert "No detections for image." in df.values
+
+
+# endregion
+
+
+# region Test localisation_only function
+def test_localisation_only(monkeypatch, tmp_path):
+    # Patch S3 client and crop_image_only
+    class DummyClient:
+        def download_file(self, bucket, key, path, Config=None):
+            Path(path).write_text("")
+
+    monkeypatch.setattr(inference_scripts, "crop_image_only", lambda *a, **k: None)
+    keys = ["img1.jpg", "img2.jpg"]
+    output_dir = tmp_path / "out"
+    output_dir.mkdir()
+    csv_file = tmp_path / "results.csv"
+    inference_scripts.localisation_only(
+        keys,
+        output_dir,
+        bucket_name="bucket",
+        client=DummyClient(),
+        remove_image=True,
+        perform_inference=True,
+        save_crops=False,
+        localisation_model=None,
+        box_threshold=0.99,
+        device="cpu",
+        csv_file=csv_file,
+        job_name="job1",
+    )
+    # Should remove files after download
+    assert not any((output_dir / "snapshots").glob("*.jpg"))
+
+
+# endregion
+
+
+# region Integration Tests
 def test_save_and_load_embedding_integration(tmp_path):
     img_path = tmp_path / "img.jpg"
     data = {"a": np.array([1, 2, 3])}
@@ -490,3 +730,6 @@ def test_perform_inf_integration(monkeypatch, tmp_path):
     df = pd.read_csv(csv_file)
     assert "image_path" in df.columns
     assert len(df) == 1
+
+
+# endregion
