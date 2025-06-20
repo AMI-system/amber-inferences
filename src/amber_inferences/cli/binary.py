@@ -1,10 +1,7 @@
 #!/usr/bin/env python3
 
 import argparse
-import json
-import random
 import torch
-import string
 from pathlib import Path
 import pandas as pd
 
@@ -70,23 +67,8 @@ if __name__ == "__main__":
         type=Path,
         help="Path to the binary model weights.",
     )
-    parser.add_argument(
-        "--job_name",
-        default=None,
-        help="Unique job name. If none, one will be randomly generated",
-    )
 
     args = parser.parse_args()
-    job_name = args.job_name
-    if job_name is None:
-        job_name = "".join(
-            random.choice(f"{string.ascii_lowercase}{string.digits}") for _ in range(16)
-        )
-    args.job_name = job_name
-
-    print(f"Saving job info to {args.output_dir}/{job_name}_job_info.json")
-    with open(args.output_dir / f"{job_name}_job_info.json", "w") as f:
-        json.dump(vars(args), f)
 
     if torch.cuda.is_available():
         device = torch.device("cuda:0")
@@ -113,5 +95,4 @@ if __name__ == "__main__":
         binary_model=models["classification_model"],
         crops_csv=args.crops_csv,
         output_csv=args.output_csv,
-        job_name=args.job_name,
     )
