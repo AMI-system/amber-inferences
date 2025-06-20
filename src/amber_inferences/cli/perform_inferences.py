@@ -115,6 +115,73 @@ def main(
     )
 
 
+def check_model_paths(args):
+    for mod_path, permitted_filetypes in [
+        (args.localisation_model_path, [".pt", ".pth"]),
+        (args.binary_model_path, [".pt", ".pth"]),
+        (args.order_model_path, [".pt", ".pth"]),
+        (args.order_thresholds_path, [".csv"]),
+        (args.species_model_path, [".pt", ".pth"]),
+        (args.species_labels, ["json"]),
+    ]:
+        if not mod_path.resolve().exists():
+            raise FileNotFoundError(f"File not found: {mod_path}")
+        if permitted_filetypes and not str(mod_path).endswith(
+            tuple(permitted_filetypes)
+        ):
+            raise ValueError(
+                f"File must be a {'|'.join(permitted_filetypes)}: {mod_path}"
+            )
+    if not args.json_file.resolve().exists():
+        raise FileNotFoundError(f"JSON file not found: {args.json_file}")
+
+
+def select_device():
+    if torch.cuda.is_available():
+        device = torch.device("cuda:0")
+        print(
+            "\033[95m\033[1mCuda available, using GPU "
+            + "\N{White Heavy Check Mark}\033[0m\033[0m"
+        )
+    else:
+        device = torch.device("cpu")
+        print(
+            "\033[95m\033[1mCuda not available, using CPU "
+            + "\N{Cross Mark}\033[0m\033[0m"
+        )
+    return device
+
+
+def validate_model_labels(models):
+    if models["order_model"] is not None and models["order_model_labels"] is not None:
+        model_out = models["order_model"]
+        labels = models["order_model_labels"]
+        if hasattr(model_out, "softmax_reg1") and hasattr(
+            model_out.softmax_reg1, "out_features"
+        ):
+            n_model = model_out.softmax_reg1.out_features
+            n_labels = len(labels)
+            if n_model != n_labels:
+                raise ValueError(
+                    f"Order model output size ({n_model}) does not match number of order labels ({n_labels})"
+                )
+    if (
+        models["species_model"] is not None
+        and models["species_model_labels"] is not None
+    ):
+        model_out = models["species_model"]
+        labels = models["species_model_labels"]
+        if hasattr(model_out, "classifier") and hasattr(
+            model_out.classifier, "out_features"
+        ):
+            n_model = model_out.classifier.out_features
+            n_labels = len(labels)
+            if n_model != n_labels:
+                raise ValueError(
+                    f"Species model output size ({n_model}) does not match number of species labels ({n_labels})"
+                )
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Process a specific chunk of S3 keys.")
     parser.add_argument(
@@ -230,53 +297,29 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    # if skip_processed is false, print that those will be skipped
     if args.skip_processed:
         print(
             "\n\033[95m\033[1mNote: Images already processed will be skipped. "
             + "\033[0m\033[0m"
         )
 
-    if torch.cuda.is_available():
-        device = torch.device("cuda:0")
-        print(
-            "\033[95m\033[1mCuda available, using GPU "
-            + "\N{White Heavy Check Mark}\033[0m\033[0m"
-        )
-    else:
-        device = torch.device("cpu")
-        print(
-            "\033[95m\033[1mCuda not available, using CPU "
-            + "\N{Cross Mark}\033[0m\033[0m"
-        )
-
-    # check if the model paths exist
-    for mod_path in [
-        args.localisation_model_path,
-        args.binary_model_path,
-        args.order_model_path,
-        args.order_thresholds_path,
-        args.species_model_path,
-        args.species_labels,
-    ]:
-        if not mod_path.resolve().exists():
-            raise FileNotFoundError(f"Model path not found: {mod_path}")
-
-    if not args.json_file.resolve().exists():
-        raise FileNotFoundError(f"JSON file not found: {args.json_file}")
-
+    check_model_paths(args)
+    device = select_device()
     print("\033[94m\033[1mLoading models...\033[0m\033[0m")
-    models = load_models(
-        device,
-        args.localisation_model_path.resolve(),
-        args.binary_model_path.resolve(),
-        args.order_model_path.resolve(),
-        args.order_thresholds_path.resolve(),
-        args.species_model_path.resolve(),
-        args.species_labels.resolve(),
-        verbose=args.verbose,
-    )
-
+    try:
+        models = load_models(
+            device,
+            args.localisation_model_path.resolve(),
+            args.binary_model_path.resolve(),
+            args.order_model_path.resolve(),
+            args.order_thresholds_path.resolve(),
+            args.species_model_path.resolve(),
+            args.species_labels.resolve(),
+            verbose=args.verbose,
+        )
+    except Exception as e:
+        raise RuntimeError(f"Failed to load models: {e}")
+    validate_model_labels(models)
     main(
         chunk_id=args.chunk_id,
         json_file=args.json_file,
