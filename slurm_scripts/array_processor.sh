@@ -41,6 +41,10 @@ python3 -m amber_inferences.cli.perform_inferences \
   --order_thresholds_path ./models/thresholdsTestTrain.csv \
   --skip_processed
 
+python3 -m amber_inferences.cli.tracking \
+  --csv_file "${output_base_dir}/${deployment_id}/${deployment_id}_${this_session}.csv" \
+  --tracking_cutoff 1
+
 if [ $? -ne 0 ]; then
     echo "Error submitting job for chunk $SLURM_ARRAY_TASK_ID of deployment $deployment_id"
     exit 1
