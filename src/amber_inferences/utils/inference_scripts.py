@@ -68,7 +68,7 @@ def get_boxes(
 
 
 def flatbug(image_path, flatbug_model, save_annotation=False):
-    output = flatbug_model(image_path)
+    output = flatbug_model(str(image_path))
 
     # Save a visualisation of the predictions
     if len(output.json_data["boxes"]) > 0 and save_annotation:
