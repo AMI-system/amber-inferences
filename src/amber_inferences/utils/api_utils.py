@@ -28,6 +28,16 @@ def get_deployments(username, password):
         sys.exit(1)
 
 
+def get_deployment_names(username, password, bucket):
+    response = get_deployments(username, password)
+    response = [x for x in response if x["country_code"].lower() == bucket.lower()]
+    deployment_names = [x["deployment_id"] for x in response]
+    if not deployment_names:
+        print(f"No deployments found for bucket: {bucket}")
+        return []
+    return deployment_names
+
+
 def count_files(s3_client, bucket_name, prefix):
     """Count number of files in a given S3 bucket with a prefix."""
     paginator = s3_client.get_paginator("list_objects_v2")

@@ -14,6 +14,7 @@ import sys
 import requests
 
 
+# TODO: archive, used in api_utils
 def get_deployments(username, password):
     """Fetch deployments from the API with authentication."""
 

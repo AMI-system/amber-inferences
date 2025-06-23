@@ -27,6 +27,30 @@ def test_get_deployments_success(monkeypatch):
     assert result == [{"deployment_id": "d1"}]
 
 
+def test_get_deployment_names_success(monkeypatch):
+    """Test that get_deployments returns a list of deployments."""
+
+    class FakeResponse:
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return [
+                {"country_code": "gbr", "deployment_id": "dep000001"},
+                {"country_code": "gbr", "deployment_id": "dep000002"},
+                {"country_code": "cri", "deployment_id": "dep000031"},
+                {"country_code": "cri", "deployment_id": "dep000032"},
+                {"country_code": "sgp", "deployment_id": "dep000050"},
+            ]
+
+    monkeypatch.setattr(api_utils.requests, "post", lambda *a, **k: FakeResponse())
+    result = api_utils.get_deployment_names("user", "pass", "cri")
+    assert "dep000031" in result
+    assert "dep000001" not in result
+    assert "dep000050" not in result
+    assert "dep000032" in result
+
+
 def test_get_deployments_http_error(monkeypatch, capsys):
     """Test that get_deployments handles HTTP errors."""
 
