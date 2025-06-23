@@ -79,17 +79,11 @@ def main(
         keys = sorted(keys)
 
         if len(csv_keys) > 0 and verbose:
-            print(
-                f"\033[93m\033[1mSkipping {len(csv_keys)} images previously processed. "
-                + "\033[0m\033[0m"
-            )
+            print(f"Skipping {len(csv_keys)} images previously processed.")
 
     # exit if length keys is 0
     if len(keys) == 0:
-        print(
-            f"\033[93m\033[1mAll images already processed in {csv_file}"
-            + "\N{Warning Sign}\033[0m\033[0m"
-        )
+        print(f"All images already processed in {csv_file}")
         return
 
     download_and_analyse(
@@ -139,16 +133,10 @@ def check_model_paths(args):
 def select_device():
     if torch.cuda.is_available():
         device = torch.device("cuda:0")
-        print(
-            "\033[95m\033[1mCuda available, using GPU "
-            + "\N{White Heavy Check Mark}\033[0m\033[0m"
-        )
+        print("Cuda available, using GPU")
     else:
         device = torch.device("cpu")
-        print(
-            "\033[95m\033[1mCuda not available, using CPU "
-            + "\N{Cross Mark}\033[0m\033[0m"
-        )
+        print("Cuda not available, using CPU")
     return device
 
 
@@ -298,14 +286,11 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     if args.skip_processed:
-        print(
-            "\n\033[95m\033[1mNote: Images already processed will be skipped. "
-            + "\033[0m\033[0m"
-        )
+        print("Note: Images already processed will be skipped.")
 
     check_model_paths(args)
     device = select_device()
-    print("\033[94m\033[1mLoading models...\033[0m\033[0m")
+    print("Loading models...")
     try:
         models = load_models(
             device,
