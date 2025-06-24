@@ -16,6 +16,7 @@ classifiers = [
 amber-deployments = "amber_inferences.cli.deployments:main"
 amber-keys = "amber_inferences.cli.generate_keys:main"
 amber-inferences = "amber_inferences.cli.perform_inferences:main"
+amber-tracking = "amber_inferences.cli.get_tracks:main"
 
 [project.urls]
 Homepage = "https://github.com/AMI-system/amber-inferences"

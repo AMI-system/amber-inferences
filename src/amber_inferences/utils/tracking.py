@@ -6,8 +6,7 @@ import pandas as pd
 import networkx as nx
 from itertools import product
 from tqdm import tqdm
-import matplotlib.pyplot as plt
-import matplotlib.colors as mcolors
+import os
 
 
 def l2_normalize(tensor):
@@ -205,16 +204,16 @@ def find_best_matches(df):
     return best_matches
 
 
-def track_id_calc(best_matches, cost_threshold=1, col_palette="tab20"):
+def track_id_calc(best_matches, cost_threshold=1):
     # Make a copy and rename the relevant columns
     best_matches = best_matches.copy()
-    rename_map = {
-        best_matches.columns[0]: "image1",
-        best_matches.columns[1]: "crop1",
-        best_matches.columns[2]: "image2",
-        best_matches.columns[3]: "crop2",
-    }
-    best_matches = best_matches.rename(columns=rename_map)
+    best_matches = best_matches.loc[best_matches["total_cost"] != "",]
+    best_matches = best_matches.loc[best_matches["best_match_crop"].notna(),]
+    best_matches = best_matches.loc[best_matches["total_cost"].notna(),]
+    best_matches["image1"] = [os.path.basename(x) for x in best_matches["image_path"]]
+    best_matches["image2"] = best_matches["previous_image"]
+    best_matches["crop1"] = best_matches["crop_status"]
+    best_matches["crop2"] = best_matches["best_match_crop"]
 
     # Filter based on the cost threshold
     filtered_matches = best_matches[best_matches["total_cost"] < cost_threshold]
@@ -278,22 +277,6 @@ def track_id_calc(best_matches, cost_threshold=1, col_palette="tab20"):
         for i in range(max_existing_id + 1, max_existing_id + 1 + unmatched_mask.sum())
     ]
     output_df.loc[unmatched_indices, "track_id"] = new_ids
-
-    # create a colour label
-    # Generate N unique colors for each track
-    num_tracks = output_df["track_id"].nunique()
-
-    # Use a colormap to get visually distinct colors
-    cmap = plt.get_cmap(col_palette, num_tracks)
-
-    # Map track_id to hex colors
-    track_id_to_color = {
-        track_id: mcolors.to_hex(cmap(i))
-        for i, track_id in enumerate(sorted(output_df["track_id"].unique()))
-    }
-
-    # Add color column to DataFrame
-    output_df["colour"] = output_df["track_id"].map(track_id_to_color)
 
     return output_df
 
