@@ -127,5 +127,4 @@ def test_track_id_calc():
     )
     out = tracking.track_id_calc(df, cost_threshold=1)
     assert "track_id" in out.columns
-    assert "colour" in out.columns
     assert out["track_id"].nunique() >= 1

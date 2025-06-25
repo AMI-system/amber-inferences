@@ -411,7 +411,7 @@ def download_image_from_key(s3_client, key, bucket, output_dir):
     s3_client.download_file(bucket, key, str(local_path))
 
 
-def get_image_metadata(path):
+def get_image_metadata(path, verbose=False):
     path = Path(path)
     try:
         dt_string = [x for x in path.name.split("-") if x.startswith(("202", "201"))][0]
@@ -427,6 +427,9 @@ def get_image_metadata(path):
             ).strftime("%Y-%m-%d")
         return image_dt, recording_session
     except Exception:
+        print(
+            f" - Could not extract datetime from {path}, returning date and session = ''"
+        )
         return "", ""
 
 
