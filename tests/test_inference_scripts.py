@@ -392,26 +392,6 @@ def test_convert_ndarrays_nested():
 # endregion
 
 
-# region Tests crop_image_only function
-def test_crop_image_only_error(tmp_path):
-    # Test that crop_image_only handles missing image files gracefully and logs error
-    csv_file = tmp_path / "out.csv"
-    result = inference_scripts.crop_image_only(
-        image_path=tmp_path / "notfound.jpg",
-        bucket_name="bucket",
-        localisation_model=None,
-        proc_device="cpu",
-        csv_file=csv_file,
-        save_crops=False,
-    )
-    assert result is None
-    df = pd.read_csv(csv_file)
-    assert "Image corrupt" in df.values
-
-
-# endregion
-
-
 # region Test classify_box function (binary inference)
 def test_classify_box():
     # Test that classify_box returns a label and score for a dummy model
@@ -591,13 +571,15 @@ def test_crop_image_only_sucess(tmp_path, monkeypatch):
 
     # Patch get_image_metadata
     monkeypatch.setattr(
-        "amber_inferences.utils.inference_scripts.get_image_metadata",
+        inference_scripts,
+        "get_image_metadata",
         lambda path: ("2024-01-01", "session1"),
     )
 
     # Patch get_boxes
     monkeypatch.setattr(
-        "amber_inferences.utils.inference_scripts.get_boxes",
+        inference_scripts,
+        "get_boxes",
         lambda *args, **kwargs: (
             {"scores": [0.999, 0.8, 0.5], "labels": ["label1", "label2", "label3"]},
             [(10, 10, 50, 50), (10, 10, 50, 50), (10, 10, 50, 50)],
@@ -605,9 +587,7 @@ def test_crop_image_only_sucess(tmp_path, monkeypatch):
     )
 
     # Patch variance_of_laplacian
-    monkeypatch.setattr(
-        "amber_inferences.utils.inference_scripts.variance_of_laplacian", lambda x: 10.5
-    )
+    monkeypatch.setattr(inference_scripts, "variance_of_laplacian", lambda x: 10.5)
 
     df = inference_scripts.crop_image_only(
         image_path=img_path,
@@ -629,6 +609,22 @@ def test_crop_image_only_sucess(tmp_path, monkeypatch):
     assert "label1" in df["box_label"].values
     assert "label2" in df["box_label"].values
     assert "label3" not in df["box_label"].values
+
+
+def test_crop_image_only_error(tmp_path):
+    # Test that crop_image_only handles missing image files gracefully and logs error
+    csv_file = tmp_path / "out.csv"
+    result = inference_scripts.crop_image_only(
+        image_path=tmp_path / "notfound.jpg",
+        bucket_name="bucket",
+        localisation_model=None,
+        proc_device="cpu",
+        csv_file=csv_file,
+        save_crops=False,
+    )
+    assert result is None
+    df = pd.read_csv(csv_file)
+    assert "Image corrupt" in df.values
 
 
 def test_crop_image_only_all_skipped(tmp_path, monkeypatch):
@@ -664,6 +660,53 @@ def test_crop_image_only_all_skipped(tmp_path, monkeypatch):
     # check the data was output correctly and no crops detected
     df = pd.read_csv(csv_file)
     assert "No detections for image." in df.values
+
+
+def test_crop_image_only_save_crops(tmp_path, monkeypatch):
+    # Test that crop_image_only saves a cropped image file when save_crops=True
+    img_path = tmp_path / "img.jpg"
+    img = Image.new("RGB", (10, 10))
+    img.save(img_path)
+    csv_file = tmp_path / "out.csv"
+    crop_dir = tmp_path / "crops"
+    crop_dir.mkdir()
+
+    # Patch get_image_metadata
+    monkeypatch.setattr(
+        inference_scripts,
+        "get_image_metadata",
+        lambda path: ("2024-01-01", "session1"),
+    )
+
+    # Patch get_boxes
+    monkeypatch.setattr(
+        inference_scripts,
+        "get_boxes",
+        lambda *args, **kwargs: (
+            {"scores": [0.999, 0.8, 0.5], "labels": ["label1", "label2", "label3"]},
+            [(10, 10, 50, 50), (10, 10, 50, 50), (10, 10, 50, 50)],
+        ),
+    )
+
+    # Patch variance_of_laplacian
+    monkeypatch.setattr(inference_scripts, "variance_of_laplacian", lambda x: 10.5)
+
+    _ = inference_scripts.crop_image_only(
+        image_path=img_path,
+        bucket_name="bucket",
+        localisation_model=None,
+        proc_device="cpu",
+        csv_file=csv_file,
+        save_crops=True,
+        box_threshold=0.95,
+        crop_dir=crop_dir,
+    )
+    # Check that a crop file was created in crop_dir
+    crop_files = list(crop_dir.glob("img_crop_1.jpg"))
+    assert len(crop_files) == 1
+    # Check that the CSV contains the crop path
+    df = pd.read_csv(csv_file)
+    assert str(crop_files[0]) in df["cropped_image_path"].values
 
 
 # endregion
@@ -816,6 +859,113 @@ def test_perform_inf_integration(monkeypatch, tmp_path):
     df = pd.read_csv(csv_file)
     assert "image_path" in df.columns
     assert len(df) == 1
+
+
+# endregion
+
+
+# region Test _get_species_and_embedding function
+@pytest.mark.parametrize(
+    "input_labels,expected",
+    [
+        (
+            ["moth", "Coleoptera"],
+            ([0.999, 0.8, 0.5], ["label1", "label2", "label3"], None),
+        ),
+        (
+            ["nonmoth", "Lepidoptera Macro"],
+            ([0.999, 0.8, 0.5], ["label1", "label2", "label3"], None),
+        ),
+        (
+            ["moth", "Lepidoptera Micro"],
+            ([0.999, 0.8, 0.5], ["label1", "label2", "label3"], None),
+        ),
+        (["nonmoth", "Coleoptera"], (["", "", ""], ["", "", ""], None)),
+    ],
+)
+def test__get_species_and_embedding(input_labels, expected, monkeypatch):
+    # Test that _get_species_and_embedding returns the correct thing depending on classification
+    class_name, order_name = input_labels
+    cropped_tensor = None
+    regional_model = None
+    regional_category_map = None
+    top_n = 3
+
+    monkeypatch.setattr(
+        inference_scripts,
+        "classify_species",
+        lambda *args, **kwargs: (
+            [0.999, 0.8, 0.5],
+            ["label1", "label2", "label3"],
+            None,
+        ),
+    )
+
+    result = inference_scripts._get_species_and_embedding(
+        class_name,
+        order_name,
+        cropped_tensor,
+        regional_model,
+        regional_category_map,
+        top_n,
+    )
+    assert result == expected
+
+
+# endregion
+
+
+# region Test _get_best_matches function
+def test__get_best_matches_with_previous(monkeypatch):
+    # Test _get_best_matches returns DataFrame from find_best_matches when previous_image_embedding exists
+    previous_image_embedding = {
+        "crop_1": {"embedding": [1, 2, 3]},
+        "crop_2": {"embedding": [4, 5, 6]},
+    }
+    crop_status = "crop_1"
+    embedding_list = {"crop_1": {"embedding": [1, 2, 3]}}
+    # Patch calculate_cost and find_best_matches to return a known DataFrame
+    monkeypatch.setattr(
+        inference_scripts,
+        "calculate_cost",
+        lambda c1, c2: pd.DataFrame(
+            {
+                "cnn_cost": [0.1],
+                "iou_cost": [0.2],
+                "box_ratio_cost": [0.3],
+                "dist_ratio_cost": [0.4],
+                "total_cost": [1.0],
+                "previous_image": ["imgA"],
+                "best_match_crop": ["crop_2"],
+            }
+        ),
+    )
+    monkeypatch.setattr(
+        inference_scripts,
+        "find_best_matches",
+        lambda df: df,
+    )
+    result = inference_scripts._get_best_matches(
+        previous_image_embedding, crop_status, embedding_list
+    )
+    assert isinstance(result, pd.DataFrame)
+    assert "cnn_cost" in result.columns
+    assert result.iloc[0]["best_match_crop"] == "crop_2"
+
+
+def test__get_best_matches_no_previous():
+    # Test _get_best_matches returns DataFrame with tracking not possible message when no previous_image_embedding
+    previous_image_embedding = {}
+    crop_status = "crop_1"
+    embedding_list = {"crop_1": {"embedding": [1, 2, 3]}}
+    result = inference_scripts._get_best_matches(
+        previous_image_embedding, crop_status, embedding_list
+    )
+    assert isinstance(result, pd.DataFrame)
+    assert (
+        result.iloc[0]["best_match_crop"]
+        == "No crops from previous image. Tracking not possible."
+    )
 
 
 # endregion
