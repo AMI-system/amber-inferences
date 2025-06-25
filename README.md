@@ -209,6 +209,14 @@ Or to check the logs:
 head ./logs/cri/dep000031_batch_1.out
 ```
 
+# Interpreting the Results
+
+The results of the inference will be saved in the output directory specified by the `--output_dir` argument. The output will include:
+- A CSV file containing the results of the inference, including species predictions, order predictions, and bounding box coordinates. The description of the columns in the CSV file are outlined in `output_description.md`.
+- A directory containing the cropped images of the detected objects, if the `--save_crops` argument is specified.
+- A directory containing the original images, if the `--remove_image` argument is not specified.
+
+
 # For Developers
 
 
