@@ -90,7 +90,7 @@ def load_loc_model(weights_path, device):
             in_features, num_classes
         )
     )
-    checkpoint = torch.load(weights_path, map_location=device, weights_only=True)
+    checkpoint = torch.load(str(weights_path), map_location=device, weights_only=True)
     state_dict = checkpoint.get("model_state_dict") or checkpoint
     model_loc.load_state_dict(state_dict)
     model_loc = model_loc.to(device)
@@ -104,7 +104,7 @@ def load_loc(localisation_model_path, device, verbose=False):
 
     # Try loading the localisation model with load_loc_model first, then try flatbug
     try:
-        localisation_model = load_loc_model(localisation_model_path, device)
+        localisation_model = load_loc_model(str(localisation_model_path), device)
         if verbose:
             print(
                 f" - Loaded localisation model from: {localisation_model_path} ({type(localisation_model)})"
@@ -115,7 +115,7 @@ def load_loc(localisation_model_path, device, verbose=False):
 
         try:
             localisation_model = Predictor(
-                model=localisation_model_path, device=device, dtype="float16"
+                model=str(localisation_model_path), device=device, dtype="float16"
             )
             if verbose:
                 print(
@@ -138,7 +138,9 @@ def load_binary(binary_model_path, device, verbose=False):
         "tf_efficientnetv2_b3", num_classes=2, weights=None
     )
     classification_model = classification_model.to(device)
-    checkpoint = torch.load(binary_model_path, map_location=device, weights_only=True)
+    checkpoint = torch.load(
+        str(binary_model_path), map_location=device, weights_only=True
+    )
     state_dict = checkpoint.get("model_state_dict") or checkpoint
     classification_model.load_state_dict(state_dict)
     classification_model.eval()
@@ -157,7 +159,7 @@ def load_order(order_model_path, order_threshold_path, device, verbose=False):
     num_classes = len(order_labels)
     model_order = ResNet50_order(num_classes=num_classes)
     model_order.load_state_dict(
-        torch.load(order_model_path, map_location=device, weights_only=True)
+        torch.load(str(order_model_path), map_location=device, weights_only=True)
     )
     model_order = model_order.to(device)
     model_order.eval()
@@ -175,7 +177,9 @@ def load_species(species_model_path, species_labels, device, verbose=False):
     num_classes = len(species_category_map)
     species_model = Resnet50_species(num_classes=num_classes)
     species_model = species_model.to(device)
-    checkpoint = torch.load(species_model_path, map_location=device, weights_only=True)
+    checkpoint = torch.load(
+        str(species_model_path), map_location=device, weights_only=True
+    )
     # The model state dict is nested in some checkpoints, and not in others
     state_dict = checkpoint.get("model_state_dict") or checkpoint
     species_model.load_state_dict(state_dict)

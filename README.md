@@ -219,5 +219,5 @@ python3 -m unittest discover -s tests
 For coverage:
 
 ```sh
-pytest --cov=src/amber_inferences tests/
+pytest --cov=src/amber_inferences tests/ --cov-report=term-missing
 ```

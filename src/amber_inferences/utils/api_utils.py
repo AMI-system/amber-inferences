@@ -28,6 +28,16 @@ def get_deployments(username, password):
         sys.exit(1)
 
 
+def get_deployment_names(username, password, bucket):
+    response = get_deployments(username, password)
+    response = [x for x in response if x["country_code"].lower() == bucket.lower()]
+    deployment_names = [x["deployment_id"] for x in response]
+    if not deployment_names:
+        print(f"No deployments found for bucket: {bucket}")
+        return []
+    return deployment_names
+
+
 def count_files(s3_client, bucket_name, prefix):
     """Count number of files in a given S3 bucket with a prefix."""
     paginator = s3_client.get_paginator("list_objects_v2")
@@ -60,7 +70,8 @@ def count_files(s3_client, bucket_name, prefix):
     }
 
 
-def deployments_summary(
+# TODO archive this function properly
+def deployments_summary_archive(
     aws_credentials,
     include_inactive=False,
     subset_countries=None,
@@ -68,7 +79,11 @@ def deployments_summary(
     summary_subdir="snapshot_images",
     include_image_count=True,
 ):
-    """Print information about deployments from the API."""
+    """
+    Print information about deployments from the API.
+    This function is covered in deployment_summary
+    """
+
     # Setup boto3 session
     session = boto3.Session(
         aws_access_key_id=aws_credentials["AWS_ACCESS_KEY_ID"],
@@ -91,17 +106,14 @@ def deployments_summary(
         subset_countries = [x.title() for x in subset_countries]
         all_countries = [x for x in all_countries if x in subset_countries]
 
+    deployment_summary = {}
+
     for country in all_countries:
-        country_depl = [x for x in all_deployments if x["country"] == country]
+        country_depl = [x for x in all_deployments if x["country"].title() == country]
 
         if not country_depl:
             print(f"No deployments found for country: {country}")
             continue
-
-        # country_code = list(set([x["country_code"] for x in country_depl]))[0]
-        # total_images = 0
-
-        deployment_summary = {}
 
         if subset_deployments:
             country_depl = [
@@ -119,4 +131,4 @@ def deployments_summary(
 
             deployment_summary[dep_info["deployment_id"]] = dep_info
 
-        return deployment_summary
+    return deployment_summary

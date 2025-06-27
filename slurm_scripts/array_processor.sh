@@ -15,6 +15,17 @@ echo "Session date: ${this_session}"
 
 echo "Output csv: ${output_base_dir}/${deployment_id}/${deployment_id}_${this_session}.csv"
 
+
+# Set up GPU monitoring log
+GPU_LOG_DIR="${output_base_dir}/${deployment_id}/compute_resources"
+mkdir -p "$GPU_LOG_DIR"
+GPU_LOG_FILE="${GPU_LOG_DIR}/gpu_usage_task_${SLURM_ARRAY_TASK_ID}.csv"
+
+# Start background GPU logger
+nvidia-smi --query-gpu=timestamp,memory.used,memory.total,utilization.gpu --format=csv -l 10 > "$GPU_LOG_FILE" &
+GPU_LOG_PID=$!
+
+
 python3 -m amber_inferences.cli.perform_inferences \
   --chunk_id ${SLURM_ARRAY_TASK_ID} \
   --json_file "${json_file}" \
@@ -33,7 +44,15 @@ python3 -m amber_inferences.cli.perform_inferences \
   --order_thresholds_path ./models/thresholdsTestTrain.csv \
   --skip_processed
 
+python3 -m amber_inferences.cli.get_tracks \
+  --csv_file "${output_base_dir}/${deployment_id}/${deployment_id}_${this_session}.csv" \
+  --tracking_threshold 1
+
 if [ $? -ne 0 ]; then
     echo "Error submitting job for chunk $SLURM_ARRAY_TASK_ID of deployment $deployment_id"
     exit 1
 fi
+
+sacct -j ${SLURM_JOBID} --format=JobID,MaxRSS,AveRSS,NNodes,Elapsed,TotalCPU,ReqMem,ReqTRES,TRESUsageOutMax,TRESUsageInMax >> "${output_base_dir}/${deployment_id}/compute_resources/sacct_${SLURM_ARRAY_TASK_ID}.txt"
+
+trap "kill $GPU_LOG_PID" EXIT

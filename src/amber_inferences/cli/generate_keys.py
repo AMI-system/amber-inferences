@@ -1,15 +1,17 @@
 #!/usr/bin/env python3
 
 import argparse
-
-# import os
 import boto3
 from amber_inferences.utils.config import load_credentials
-
 from amber_inferences.utils.key_utils import save_keys
 
 
 def main():
+    """
+    Main function to generate a file containing S3 keys from a specified bucket.
+    It lists all keys in the bucket, optionally filtered by deployment ID and file extensions,
+    and saves them to an output file.
+    """
     parser = argparse.ArgumentParser(
         description="Generate a file containing S3 keys from a bucket."
     )
@@ -59,21 +61,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-    # parser = argparse.ArgumentParser(
-    #     description="Save image files from S3 workload into file."
-    # )
-    # parser.add_argument(
-    #     "--input_file",
-    #     type=str,
-    #     required=True,
-    #     help="Path to file containing S3 keys, one per line.",
-    # )
-
-    # parser.add_argument(
-    #     "--output_file",
-    #     type=str,
-    #     required=True,
-    #     help="Path to save the output JSON file.",
-    # )
-    # args = parser.parse_args()

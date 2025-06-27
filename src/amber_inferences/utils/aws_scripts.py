@@ -11,7 +11,8 @@ import tqdm
 from boto3.s3.transfer import TransferConfig
 from requests.auth import HTTPBasicAuth
 
-from utils.inference_scripts import perform_inf
+
+from amber_inferences.utils.inference_scripts import perform_inf
 
 
 def list_objects(session, bucket_name, prefix, username, password):
