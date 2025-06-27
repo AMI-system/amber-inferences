@@ -214,6 +214,7 @@ def track_id_calc(best_matches, cost_threshold=1):
     # dummy populate the first frame values, in order for tracks to start there
     # this works by tracking these crops to themselves
     first_frame = best_matches[best_matches["image2"].isnull()].copy()
+    first_frame = first_frame[first_frame["crop1"].str.contains("crop_")]
     first_frame["image2"] = first_frame["image1"]
     first_frame["crop2"] = first_frame["crop1"]
     first_frame["total_cost"] = 0
