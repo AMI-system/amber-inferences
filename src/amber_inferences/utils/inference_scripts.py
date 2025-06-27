@@ -157,9 +157,86 @@ def classify_box(image_tensor, binary_model):
     return label, score
 
 
+def _extract_deployment_fields(dep_data):
+    """Return deployment fields in the order needed for result rows."""
+    return [
+        dep_data.get("country_code", ""),
+        dep_data.get("location_name", ""),
+        dep_data.get("deployment_id", ""),
+        dep_data.get("lat", ""),
+        dep_data.get("lon", ""),
+    ]
+
+
+def _build_crop_row(
+    image_path,
+    image_dt,
+    dep_data,
+    current_dt,
+    recording_session,
+    job_name,
+    image_bluriness,
+    crop_status,
+    box_score,
+    box_label,
+    x_min,
+    y_min,
+    x_max,
+    y_max,
+    crop_bluriness,
+    crop_area,
+    crop_path,
+    all_cols,
+):
+    """Build a result row for a detected crop."""
+    return [
+        image_path,
+        image_dt,
+        *_extract_deployment_fields(dep_data),
+        current_dt,
+        recording_session,
+        job_name,
+        image_bluriness,
+        crop_status,
+        box_score,
+        box_label,
+        x_min,
+        y_min,
+        x_max,
+        y_max,
+        crop_bluriness,
+        crop_area,
+        crop_path,
+    ] + [""] * (len(all_cols) - 21)
+
+
+def _build_error_row(
+    image_path, image_dt, dep_data, current_dt, recording_session, message, all_cols
+):
+    """Build a result row for an error or skipped image."""
+    return [
+        image_path,
+        image_dt,
+        *_extract_deployment_fields(dep_data),
+        current_dt,
+        recording_session,
+        "",
+        message,
+    ] + [""] * (len(all_cols) - 11)
+
+
+def _save_crop_image(cropped_image, crop_dir, image_path, crop_status):
+    """Save a cropped image and return its path."""
+    crop_dir = Path(crop_dir)
+    crop_path = crop_dir / image_path.with_suffix("").name
+    crop_path = crop_path.with_name(f"{crop_path.name}_{crop_status}.jpg")
+    cropped_image.save(crop_path)
+    return crop_path
+
+
 def crop_image_only(
     image_path,
-    bucket_name,
+    dep_data,
     localisation_model,
     proc_device,
     csv_file,
@@ -168,10 +245,16 @@ def crop_image_only(
     job_name=None,
     crop_dir=None,
 ):
+    image_path = Path(image_path)
+    csv_file = Path(csv_file)
     all_cols = [
         "image_path",
         "image_datetime",
         "bucket_name",
+        "deployment_name",
+        "deployment_id",
+        "latitude",
+        "longitude",
         "analysis_datetime",
         "recording_session",
         "job_name",
@@ -182,58 +265,37 @@ def crop_image_only(
         "x_min",
         "y_min",
         "x_max",
-        "y_max",  # localisation info
+        "y_max",
         "crop_bluriness",
         "crop_area",
         "cropped_image_path",
     ]
-
-    # Use get_image_metadata to extract datetime and session
     image_dt, recording_session = get_image_metadata(image_path)
-    current_dt = datetime.now()
-    current_dt = datetime.strftime(current_dt, "%Y-%m-%d %H:%M:%S")
-
+    current_dt = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     crops_df = pd.DataFrame(columns=all_cols)
-
     try:
-        # check if image_path viable
-        image_path = Path(image_path)
         if not image_path.exists():
             raise FileNotFoundError(f"Image file not found: {image_path}")
         image = Image.open(image_path).convert("RGB")
     except Exception as e:
         print(f"Error opening image {image_path}: {e}")
-
-        df = pd.DataFrame(
-            [
-                [
-                    image_path,
-                    image_dt,
-                    bucket_name,
-                    current_dt,
-                    recording_session,
-                    "",  # bluriness
-                    "Image corrupt",
-                ]
-                + [""] * (len(all_cols) - 7),
-            ],
-            columns=all_cols,
+        row = _build_error_row(
+            image_path,
+            image_dt,
+            dep_data,
+            current_dt,
+            recording_session,
+            "Image corrupt",
+            all_cols,
         )
-
-        df.to_csv(
-            str(csv_file),
-            mode="a",
-            header=not csv_file.is_file(),
-            index=False,
-        )
+        df = pd.DataFrame([row], columns=all_cols)
+        df.to_csv(str(csv_file), mode="a", header=not csv_file.is_file(), index=False)
         crops_df = pd.concat([crops_df, df])
-        return  # Skip this image
-
+        return
     image_bluriness = variance_of_laplacian(np.array(image))
 
     original_image = image.copy()
     original_width, original_height = image.size
-
     localisation_outputs, box_coords = get_boxes(
         localisation_model,
         image,
@@ -244,104 +306,73 @@ def crop_image_only(
     )
 
     skipped = []
-
-    # catch no crops: if no boxes or all boxes below threshold
     if len(box_coords) == 0 or all(
         [score < box_threshold for score in localisation_outputs["scores"]]
     ):
         skipped = [True]
-
-    # for each detection
-    for i in range(0, len(box_coords)):
-        crop_status = "crop_" + str(i + 1)
-        x_min, y_min, x_max, y_max = box_coords[i]
-
+    for i, (x_min, y_min, x_max, y_max) in enumerate(box_coords):
+        crop_status = f"crop_{i+1}"
         box_score = localisation_outputs["scores"][i]
         box_label = localisation_outputs["labels"][i]
-
         crop_area = (x_max - x_min) * (y_max - y_min)
-
         if float(box_score) >= box_threshold:
-            # Crop the detected region and perform classification
             cropped_image = original_image.crop((x_min, y_min, x_max, y_max))
             crop_bluriness = variance_of_laplacian(np.array(cropped_image))
-
-            # if save_crops then save the cropped image
             crop_path = ""
-            if save_crops:
-                crop_path = crop_dir / image_path.with_suffix("").name
-                crop_path = crop_path.with_name(f"{crop_path.name}_{crop_status}.jpg")
-                cropped_image.save(crop_path)
+            if save_crops and crop_dir:
+                crop_path = _save_crop_image(
+                    cropped_image, crop_dir, image_path, crop_status
+                )
 
-            # append to csv with pandas
-            df = pd.DataFrame(
-                [
-                    [
-                        image_path,
-                        image_dt,
-                        bucket_name,
-                        current_dt,
-                        recording_session,
-                        job_name,
-                        image_bluriness,
-                        crop_status,
-                        box_score,
-                        box_label,
-                        x_min,
-                        y_min,
-                        x_max,
-                        y_max,
-                        crop_bluriness,
-                        crop_area,
-                        crop_path,
-                    ]
-                ],
-                columns=all_cols,
+            # print(crop_bluriness)
+            row = _build_crop_row(
+                image_path,
+                image_dt,
+                dep_data,
+                current_dt,
+                recording_session,
+                job_name,
+                image_bluriness,
+                crop_status,
+                box_score,
+                box_label,
+                x_min,
+                y_min,
+                x_max,
+                y_max,
+                crop_bluriness,
+                crop_area,
+                crop_path,
+                all_cols,
             )
-
+            df = pd.DataFrame([row], columns=all_cols)
             df.to_csv(
-                str(csv_file),
-                mode="a",
-                header=not csv_file.is_file(),
-                index=False,
+                str(csv_file), mode="a", header=not csv_file.is_file(), index=False
             )
             crops_df = pd.concat([crops_df, df])
-            skipped = skipped + [False]
+            skipped.append(False)
         else:
-            skipped = skipped + [True]
-
-    # catch images where no detection or all considered too large/not confident enough
+            skipped.append(True)
     if all(skipped):
-        df = pd.DataFrame(
-            [
-                [
-                    image_path,
-                    image_dt,
-                    bucket_name,
-                    current_dt,
-                    recording_session,
-                    image_bluriness,
-                    "No detections for image.",
-                ]
-                + [""] * (len(all_cols) - 7),
-            ],
-            columns=all_cols,
+        row = _build_error_row(
+            image_path,
+            image_dt,
+            dep_data,
+            current_dt,
+            recording_session,
+            "No detections for image.",
+            all_cols,
         )
-        df.to_csv(
-            str(csv_file),
-            mode="a",
-            header=not csv_file.is_file(),
-            index=False,
-        )
+        df = pd.DataFrame([row], columns=all_cols)
+        df.to_csv(str(csv_file), mode="a", header=not csv_file.is_file(), index=False)
         crops_df = pd.concat([crops_df, df])
-
     return crops_df
 
 
 def localisation_only(
     keys,
     output_dir,
-    bucket_name,
+    dep_data,
     client,
     remove_image=True,
     perform_inference=True,
@@ -370,14 +401,16 @@ def localisation_only(
     for key in keys:
         local_path = output_dir / "snapshots" / Path(key).name
         print(f"Downloading {key} to {local_path}")
-        client.download_file(bucket_name, key, str(local_path), Config=transfer_config)
+        client.download_file(
+            dep_data["country_code"], key, str(local_path), Config=transfer_config
+        )
 
         # Perform image analysis if enabled
         print(f"Analysing {local_path}")
         if perform_inference:
             crop_image_only(
                 local_path,
-                bucket_name=bucket_name,
+                dep_data=dep_data,
                 localisation_model=localisation_model,
                 box_threshold=box_threshold,
                 proc_device=device,
@@ -474,7 +507,7 @@ def save_result_row(data, columns, csv_file):
 def get_default_row(
     image_path,
     image_dt,
-    bucket_name,
+    dep_data,
     current_dt,
     recording_session,
     bluriness,
@@ -484,12 +517,16 @@ def get_default_row(
     return [
         image_path,
         image_dt,
-        bucket_name,
+        dep_data["country_code"],  # bucket name
+        dep_data["location_name"],
+        dep_data["deployment_id"],
+        dep_data["lat"],
+        dep_data["lon"],
         current_dt,
         recording_session,
         bluriness,
         message,
-    ] + [""] * (len(all_cols) - 7)
+    ] + [""] * (len(all_cols) - 11)
 
 
 def get_previous_embedding(previous_image, verbose=False):
@@ -570,7 +607,6 @@ def _get_best_matches(previous_image_embedding, crop_status, embedding_list):
 
 def perform_inf(
     image_path,
-    bucket_name,
     localisation_model,
     binary_model,
     order_model,
@@ -579,12 +615,14 @@ def perform_inf(
     regional_category_map,
     proc_device,
     order_data_thresholds,
+    dep_data,
     csv_file,
     save_crops,
     box_threshold=0.995,
     top_n=5,
     verbose=False,
     previous_image=None,
+    crop_dir=None,  # <--- add crop_dir
 ):
     image_path = Path(image_path)
     csv_file = Path(csv_file)
@@ -605,6 +643,10 @@ def perform_inf(
             "image_path",
             "image_datetime",
             "bucket_name",
+            "deployment_name",
+            "deployment_id",
+            "latitude",
+            "longitude",
             "analysis_datetime",
             "recording_session",
             "image_bluriness",
@@ -645,7 +687,7 @@ def perform_inf(
             get_default_row(
                 image_path,
                 image_dt,
-                bucket_name,
+                dep_data,
                 current_dt,
                 recording_session,
                 "",
@@ -713,9 +755,10 @@ def perform_inf(
         }
 
         crop_path = ""
-        if save_crops:
-            crop_path = image_path.with_name(f"{image_path.stem}_{crop_status}.jpg")
-            cropped_image.save(crop_path)
+        if save_crops and crop_dir:
+            crop_path = _save_crop_image(
+                cropped_image, crop_dir, image_path, crop_status
+            )
 
         best_matches = _get_best_matches(
             previous_image_embedding, crop_status, embedding_list
@@ -725,7 +768,7 @@ def perform_inf(
             [
                 image_path,
                 image_dt,
-                bucket_name,
+                *(_extract_deployment_fields(dep_data)),
                 current_dt,
                 recording_session,
                 image_bluriness,
@@ -756,7 +799,6 @@ def perform_inf(
                 best_matches["total_cost"].values[0],
             ]
         )
-
         save_result_row(row, all_cols, csv_file)
 
     # append embedding to json
@@ -767,13 +809,12 @@ def perform_inf(
     save_embedding(embedding_list, image_path, verbose=verbose)
 
     if skipped:
-        row = get_default_row(
+        row = _build_error_row(
             image_path,
             image_dt,
-            bucket_name,
+            dep_data,
             current_dt,
             recording_session,
-            image_bluriness,
             "No detections for this image.",
             all_cols,
         )
@@ -783,7 +824,7 @@ def perform_inf(
 def download_and_analyse(
     keys,
     output_dir,
-    bucket_name,
+    dep_data,
     client,
     remove_image=True,
     perform_inference=True,
@@ -808,14 +849,14 @@ def download_and_analyse(
 
     previous_image = None
     for key in keys:
-        download_image_from_key(client, key, bucket_name, output_dir)
+        download_image_from_key(client, key, dep_data["country_code"], output_dir)
         local_path = output_dir / Path(key).name
 
         # Perform image analysis if enabled
         if perform_inference:
             perform_inf(
                 local_path,
-                bucket_name=bucket_name,
+                bucket_name=dep_data["country_code"],
                 localisation_model=localisation_model,
                 box_threshold=box_threshold,
                 binary_model=binary_model,
@@ -825,6 +866,7 @@ def download_and_analyse(
                 regional_category_map=species_labels,
                 proc_device=device,
                 order_data_thresholds=order_data_thresholds,
+                dep_data=dep_data,
                 csv_file=csv_file,
                 top_n=top_n,
                 save_crops=save_crops,

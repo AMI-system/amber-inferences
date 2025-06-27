@@ -110,15 +110,31 @@ def deployment_data(
 
     # Loop through each country to print deployment information
     all_countries = list(set([dep["country"].title() for dep in all_deployments]))
+    all_ccodes = list(set([dep["country_code"].title() for dep in all_deployments]))
 
     if subset_countries is not None:
         subset_countries = [x.title() for x in subset_countries]
-        not_included_countries = [x for x in subset_countries if x not in all_countries]
+        not_included_countries = [
+            x
+            for x in subset_countries
+            if (x not in all_countries) and (x not in all_ccodes)
+        ]
         for missing in not_included_countries:
             print(
                 f"\033[1mWARNING: {missing} does not have any {act_string}deployments, check spelling\033[0m"
             )
         all_countries = [x for x in all_countries if x in subset_countries]
+
+        # if country code was used
+        all_countries = all_countries + list(
+            set(
+                [
+                    x["country"].title()
+                    for x in all_deployments
+                    if x["country_code"].title() in subset_countries
+                ]
+            )
+        )
 
     deployment_data = {}
     for country in all_countries:
@@ -276,7 +292,7 @@ def main():
     parser.add_argument(
         "--subset_countries",
         nargs="+",
-        help="Optional list to subset for specific countries (e.g. --subset_countries 'Panama' 'Thailand').",
+        help="Optional list to subset for specific countries using name/code(e.g. --subset_countries 'Panama' 'tha').",
         default=None,
     )
     args = parser.parse_args()

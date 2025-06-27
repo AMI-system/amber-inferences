@@ -12,6 +12,18 @@ from string import ascii_lowercase
 import amber_inferences.utils.inference_scripts as inference_scripts
 
 
+def get_dep_data():
+    return {
+        "country": "Test",
+        "country_code": "test",
+        "lat": "0",
+        "lon": "0",
+        "deployment_id": "dep00test",
+        "location_name": "Test",
+        "bucket_name": "test",
+    }
+
+
 # region Tests for variance_of_laplacian function
 def test_variance_of_laplacian(monkeypatch):
     # Test that variance_of_laplacian returns 0.0 for a constant image using a dummy cv2
@@ -331,14 +343,16 @@ def test_get_previous_embedding_no_json(tmp_path, capsys):
 # region Tests for get_default_row function
 @pytest.mark.parametrize(
     "input,expected",
-    [(["a"] * 10, 10), (["a"] * 8, 8), ([], 7)],
+    [(["a"] * 12, 12), (["a"] * 32, 32), ([], 11)],
 )
 def test_get_default_row(input, expected):
     # Test that get_default_row returns a row of the correct length
+    dep_data = get_dep_data()
+
     row = inference_scripts.get_default_row(
         "img.jpg",
         "2024-01-01",
-        "bucket",
+        dep_data,
         "2024-01-01",
         "2024-01-01",
         0.1,
@@ -589,9 +603,11 @@ def test_crop_image_only_sucess(tmp_path, monkeypatch):
     # Patch variance_of_laplacian
     monkeypatch.setattr(inference_scripts, "variance_of_laplacian", lambda x: 10.5)
 
+    dep_data = get_dep_data()
+
     df = inference_scripts.crop_image_only(
         image_path=img_path,
-        bucket_name="bucket",
+        dep_data=dep_data,
         localisation_model=None,
         proc_device="cpu",
         csv_file=csv_file,
@@ -614,9 +630,11 @@ def test_crop_image_only_sucess(tmp_path, monkeypatch):
 def test_crop_image_only_error(tmp_path):
     # Test that crop_image_only handles missing image files gracefully and logs error
     csv_file = tmp_path / "out.csv"
+    dep_data = get_dep_data()
+
     result = inference_scripts.crop_image_only(
         image_path=tmp_path / "notfound.jpg",
-        bucket_name="bucket",
+        dep_data=dep_data,
         localisation_model=None,
         proc_device="cpu",
         csv_file=csv_file,
@@ -647,10 +665,13 @@ def test_crop_image_only_all_skipped(tmp_path, monkeypatch):
     img_path = tmp_path / "img.jpg"
     img = Image.new("RGB", (10, 10))
     img.save(img_path)
+
+    dep_data = get_dep_data()
+
     csv_file = tmp_path / "out.csv"
     _ = inference_scripts.crop_image_only(
         image_path=img_path,
-        bucket_name="bucket",
+        dep_data=dep_data,
         localisation_model=DummyModel(),
         proc_device="cpu",
         csv_file=csv_file,
@@ -691,9 +712,11 @@ def test_crop_image_only_save_crops(tmp_path, monkeypatch):
     # Patch variance_of_laplacian
     monkeypatch.setattr(inference_scripts, "variance_of_laplacian", lambda x: 10.5)
 
+    dep_data = get_dep_data()
+
     _ = inference_scripts.crop_image_only(
         image_path=img_path,
-        bucket_name="bucket",
+        dep_data=dep_data,
         localisation_model=None,
         proc_device="cpu",
         csv_file=csv_file,
@@ -724,10 +747,13 @@ def test_localisation_only(monkeypatch, tmp_path):
     output_dir = tmp_path / "out"
     output_dir.mkdir()
     csv_file = tmp_path / "results.csv"
+
+    dep_data = get_dep_data()
+
     inference_scripts.localisation_only(
         keys,
         output_dir,
-        bucket_name="bucket",
+        dep_data=dep_data,
         client=DummyClient(),
         remove_image=True,
         perform_inference=True,
@@ -838,9 +864,10 @@ def test_perform_inf_integration(monkeypatch, tmp_path):
     img = Image.new("RGB", (10, 10))
     img.save(img_path)
     csv_file = tmp_path / "out.csv"
+    dep_data = get_dep_data()
     inference_scripts.perform_inf(
         image_path=img_path,
-        bucket_name="bucket",
+        dep_data=dep_data,
         localisation_model=None,
         binary_model=None,
         order_model=None,
