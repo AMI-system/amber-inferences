@@ -3,6 +3,7 @@ import numpy as np
 from torchvision import transforms
 import torch
 import pandas as pd
+import os
 import networkx as nx
 from itertools import product
 from tqdm import tqdm
@@ -206,6 +207,10 @@ def find_best_matches(df):
 def track_id_calc(best_matches, cost_threshold=1):
     # Make a copy and rename the relevant columns
     best_matches = best_matches.copy()
+    best_matches["base_image_path"] = best_matches["image_path"].apply(
+        lambda x: os.path.dirname(x)
+    )
+
     best_matches["image1"] = best_matches["base_image_path"]
     best_matches["image2"] = best_matches["previous_image"]
     best_matches["crop1"] = best_matches["crop_status"]
