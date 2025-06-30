@@ -12,6 +12,8 @@ credentials_file="./credentials.json"
 mkdir -p "${output_base_dir}"
 mkdir -p "${json_directory}"
 
+rm -rf "${output_base_dir:?}"/*
+
 # for each json file/deployment, create a slurm job
 for json_file in ${json_directory}/dep*.json; do
   if [[ ! -f "$json_file" ]]; then
