@@ -572,7 +572,11 @@ def _get_species_and_embedding(
         return [""] * top_n, [""] * top_n, None
 
 
-def _get_best_matches(previous_image_embedding, crop_status, embedding_list):
+def _get_best_matches(previous_image, crop_status, embedding_list, verbose=False):
+    # load in embedding from the previous image
+    previous_image_embedding = get_previous_embedding(previous_image, verbose)
+    print(previous_image_embedding)
+
     if len(previous_image_embedding) > 0:
         crop_similarities = pd.DataFrame({})
         for crop_1 in list(previous_image_embedding.keys()):
@@ -586,7 +590,7 @@ def _get_best_matches(previous_image_embedding, crop_status, embedding_list):
             {
                 "previous_image": [None],
                 "best_match_crop": [
-                    "No crops from previous image. Tracking not possible."
+                    "No species crops from this/previous image. Tracking not possible."
                 ],
                 "cnn_cost": [""],
                 "iou_cost": [""],
@@ -635,9 +639,6 @@ def perform_inf(
             transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5]),
         ]
     )
-
-    # load in embedding from the previous image
-    previous_image_embedding = get_previous_embedding(previous_image, verbose)
 
     all_cols = (
         [
@@ -747,13 +748,14 @@ def perform_inf(
             top_n,
         )
 
-        embedding_list[crop_status] = {
-            "embedding": embedding,
-            "image_path": os.path.basename(image_path),
-            "image_size": [original_width, original_height],
-            "crop": crop_status,
-            "box": {"xmin": x_min, "ymin": y_min, "xmax": x_max, "ymax": y_max},
-        }
+        if embedding is not None:
+            embedding_list[crop_status] = {
+                "embedding": embedding,
+                "image_path": os.path.basename(image_path),
+                "image_size": [original_width, original_height],
+                "crop": crop_status,
+                "box": {"xmin": x_min, "ymin": y_min, "xmax": x_max, "ymax": y_max},
+            }
 
         crop_path = ""
         if save_crops and crop_dir:
@@ -762,7 +764,7 @@ def perform_inf(
             )
 
         best_matches = _get_best_matches(
-            previous_image_embedding, crop_status, embedding_list
+            previous_image, crop_status, embedding_list, verbose
         )
 
         row = (
