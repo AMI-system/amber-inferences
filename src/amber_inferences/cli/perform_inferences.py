@@ -115,7 +115,7 @@ def main(
         device=device,
         order_data_thresholds=order_data_thresholds,
         top_n=top_n,
-        csv_file=str(csv_file),
+        csv_file=csv_file,
         verbose=verbose,
     )
 

@@ -501,7 +501,8 @@ def save_embedding(data, image_path, verbose=False):
 def save_result_row(data, columns, csv_file):
     csv_file = Path(csv_file)
     df = pd.DataFrame([data], columns=columns)
-    df.to_csv(csv_file, mode="a", header=not csv_file.is_file(), index=False)
+    write_type = "a" if csv_file.is_file() else "w"
+    df.to_csv(csv_file, mode=write_type, header=not csv_file.is_file(), index=False)
 
 
 def get_default_row(
@@ -607,6 +608,7 @@ def _get_best_matches(previous_image_embedding, crop_status, embedding_list):
 
 def perform_inf(
     image_path,
+    dep_data,
     localisation_model,
     binary_model,
     order_model,
@@ -615,14 +617,13 @@ def perform_inf(
     regional_category_map,
     proc_device,
     order_data_thresholds,
-    dep_data,
     csv_file,
     save_crops,
     box_threshold=0.995,
     top_n=5,
     verbose=False,
     previous_image=None,
-    crop_dir=None,  # <--- add crop_dir
+    crop_dir=None,
 ):
     image_path = Path(image_path)
     csv_file = Path(csv_file)
@@ -856,7 +857,7 @@ def download_and_analyse(
         if perform_inference:
             perform_inf(
                 local_path,
-                bucket_name=dep_data["country_code"],
+                dep_data=dep_data,
                 localisation_model=localisation_model,
                 box_threshold=box_threshold,
                 binary_model=binary_model,
@@ -866,7 +867,6 @@ def download_and_analyse(
                 regional_category_map=species_labels,
                 proc_device=device,
                 order_data_thresholds=order_data_thresholds,
-                dep_data=dep_data,
                 csv_file=csv_file,
                 top_n=top_n,
                 save_crops=save_crops,
