@@ -39,7 +39,7 @@ def list_objects(session, bucket_name, prefix, username, password):
 
 def download_object(
     s3_client,
-    bucket_name,
+    dep_info,
     key,
     download_path,
     perform_inference=False,
@@ -67,7 +67,9 @@ def download_object(
     )
 
     try:
-        s3_client.download_file(bucket_name, key, download_path, Config=transfer_config)
+        s3_client.download_file(
+            dep_info["country_code"], key, download_path, Config=transfer_config
+        )
 
         # If crops are saved, define the frequecy
 
@@ -77,7 +79,7 @@ def download_object(
         if perform_inference:
             perform_inf(
                 download_path,
-                bucket_name=bucket_name,
+                dep_info=dep_info,
                 loc_model=localisation_model,
                 binary_model=binary_model,
                 order_model=order_model,
@@ -93,7 +95,7 @@ def download_object(
             os.remove(download_path)
     except Exception as e:
         print(
-            f"\033[91m\033[1m Error downloading {bucket_name}/{key}: {e}\033[0m\033[0m"
+            f"Error downloading {dep_info['country_code']}/{key}: {e}", file=sys.stderr
         )
 
 
@@ -162,24 +164,6 @@ def download_batch(
         )
 
 
-def count_files(s3_client, bucket_name, prefix):
-    """
-    Count number of files for a given prefix.
-    """
-    paginator = s3_client.get_paginator("list_objects_v2")
-    operation_parameters = {"Bucket": bucket_name, "Prefix": prefix}
-    page_iterator = paginator.paginate(**operation_parameters)
-
-    count = 0
-    all_keys = []
-    for page in page_iterator:
-        if not os.path.basename(page.get("Contents", [])[0]["Key"]).startswith("$"):
-            count += page.get("KeyCount", 0)
-            file_i = page.get("Contents", [])[0]["Key"]
-            all_keys = all_keys + [file_i]
-    return count, all_keys
-
-
 def get_objects(
     session,
     aws_credentials,
@@ -206,22 +190,23 @@ def get_objects(
     """
     s3_client = session.client("s3", endpoint_url=aws_credentials["AWS_URL_ENDPOINT"])
 
-    total_files, all_keys = count_files(s3_client, bucket_name, prefix)
-
     paginator = s3_client.get_paginator("list_objects_v2")
     operation_parameters = {"Bucket": bucket_name, "Prefix": prefix}
     page_iterator = paginator.paginate(**operation_parameters)
 
     keys = []
     for page in page_iterator:
-        if os.path.basename(page.get("Contents", [])[0]["Key"]).startswith("$"):
-            print(
-                f'{page.get("Contents", [])[0]["Key"]} is suspected corrupt, skipping'
-            )
-            continue
-
         for obj in page.get("Contents", []):
-            keys.append(obj["Key"])
+            key = obj["Key"]
+            if os.path.basename(key).startswith("$"):
+                print(f"{key} is suspected corrupt, skipping")
+                continue
+            elif not key.endswith((".jpeg", ".jpg")):
+                print(f"{key} is not a valid image file, skipping")
+                continue
+            # Add the key to the list if it is a valid image file
+            else:
+                keys.append(key)
 
     # don't rerun previously analysed images
     results_df = pd.read_csv(csv_file, dtype=str)
@@ -229,14 +214,15 @@ def get_objects(
     keys = [x for x in keys if x not in run_images]
 
     # Divide the keys among workers
-    chunks = [
-        keys[i : i + math.ceil(len(keys) / num_workers)]
-        for i in range(0, len(keys), math.ceil(len(keys) / num_workers))
-    ]
+    if len(keys) == 0:
+        chunks = []
+    else:
+        chunk_size = max(1, math.ceil(len(keys) / num_workers))
+        chunks = [keys[i : i + chunk_size] for i in range(0, len(keys), chunk_size)]
 
     # Shared progress bar
     progress_bar = tqdm.tqdm(
-        total=total_files,
+        total=len(keys),  # total_files,
         desc=f"Download files for {os.path.basename(csv_file).replace('_results.csv', '')}",
     )
 
