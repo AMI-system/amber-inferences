@@ -32,8 +32,10 @@ def make_fake_deployments():
 
 
 def test_get_deployments_success(monkeypatch):
+    import amber_inferences.utils.api_utils as api_utils
+
     monkeypatch.setattr(
-        deployment_summary.requests,
+        api_utils.requests,
         "post",
         lambda *a, **k: type(
             "Resp",
@@ -56,9 +58,9 @@ def test_get_deployments_http_error(monkeypatch):
         def raise_for_status(self):
             raise deployment_summary.requests.exceptions.HTTPError("401 error")
 
-    monkeypatch.setattr(
-        deployment_summary.requests, "post", lambda *a, **k: FakeResponse()
-    )
+    import amber_inferences.utils.api_utils as api_utils
+
+    monkeypatch.setattr(api_utils.requests, "post", lambda *a, **k: FakeResponse())
     with pytest.raises(SystemExit):
         get_deployments("user", "pass")
 
