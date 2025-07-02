@@ -3,10 +3,10 @@ import numpy as np
 from torchvision import transforms
 import torch
 import pandas as pd
+import os
 import networkx as nx
 from itertools import product
 from tqdm import tqdm
-import os
 
 
 def l2_normalize(tensor):
@@ -207,13 +207,36 @@ def find_best_matches(df):
 def track_id_calc(best_matches, cost_threshold=1):
     # Make a copy and rename the relevant columns
     best_matches = best_matches.copy()
-    best_matches = best_matches.loc[best_matches["total_cost"] != "",]
-    best_matches = best_matches.loc[best_matches["best_match_crop"].notna(),]
-    best_matches = best_matches.loc[best_matches["total_cost"].notna(),]
-    best_matches["image1"] = [os.path.basename(x) for x in best_matches["image_path"]]
+    best_matches["base_image_path"] = best_matches["image_path"].apply(
+        lambda x: os.path.basename(str(x))
+    )
+
+    best_matches["image1"] = best_matches["base_image_path"]
     best_matches["image2"] = best_matches["previous_image"]
     best_matches["crop1"] = best_matches["crop_status"]
     best_matches["crop2"] = best_matches["best_match_crop"]
+
+    # dummy populate the first frame values, in order for tracks to start there
+    # this works by tracking these crops to themselves
+    first_frame = best_matches[
+        best_matches["image1"] == best_matches["image1"].values[0]
+    ].copy()
+
+    best_matches = best_matches.loc[best_matches["total_cost"] != "",]
+    best_matches = best_matches.loc[best_matches["total_cost"].notna(),]
+
+    first_frame = first_frame[
+        (first_frame["image1"] + first_frame["crop1"]).isin(
+            best_matches["image2"] + best_matches["crop2"]
+        )
+    ]
+    first_frame["image2"] = first_frame["image1"]
+    first_frame["crop2"] = first_frame["crop1"]
+    first_frame["total_cost"] = 0
+
+    best_matches = pd.concat([first_frame, best_matches], ignore_index=True)
+    best_matches = best_matches.loc[best_matches["total_cost"] != "",]
+    best_matches = best_matches.loc[best_matches["total_cost"].notna(),]
 
     # Filter based on the cost threshold
     filtered_matches = best_matches[best_matches["total_cost"] < cost_threshold]
@@ -251,7 +274,7 @@ def track_id_calc(best_matches, cost_threshold=1):
     # Assemble the final output rows
     output_rows = []
     for node in all_nodes:
-        image_path, crop_id = node.rsplit("|", 2)
+        image_path, crop_id = node.rsplit("|", maxsplit=1)
         output_rows.append(
             {
                 "image_path": image_path,
@@ -302,20 +325,5 @@ def crop_costs(embedding_list):
         c_b["image_path"] = image_b
 
         results_df = calculate_cost(c_a, c_b)
-
-    # columns = [
-    #     "image_path1",
-    #     "crop1_id",
-    #     "image_path2",
-    #     "crop2_id",
-    #     "cnn_cost",
-    #     "iou_cost",
-    #     "box_ratio_cost",
-    #     "dist_ratio_cost",
-    #     "total_cost",
-    # ]
-
-    # results_df = pd.DataFrame(results).reset_index(drop=True)
-    # results_df.columns = columns
 
     return results_df

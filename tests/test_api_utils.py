@@ -51,6 +51,28 @@ def test_get_deployment_names_success(monkeypatch):
     assert "dep000032" in result
 
 
+def test_get_deployment_names_no_bucket(monkeypatch, capsys):
+    """Test that get_deployment_names prints an error if bucket not in object store."""
+
+    class FakeResponse:
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return [
+                {"country_code": "gbr", "deployment_id": "dep000001"},
+                {"country_code": "gbr", "deployment_id": "dep000002"},
+                {"country_code": "cri", "deployment_id": "dep000031"},
+                {"country_code": "cri", "deployment_id": "dep000032"},
+                {"country_code": "sgp", "deployment_id": "dep000050"},
+            ]
+
+    monkeypatch.setattr(api_utils.requests, "post", lambda *a, **k: FakeResponse())
+    result = api_utils.get_deployment_names("user", "pass", "atlanta")
+    assert "No deployments found for bucket:" in capsys.readouterr().out
+    assert result == []
+
+
 def test_get_deployments_http_error(monkeypatch, capsys):
     """Test that get_deployments handles HTTP errors."""
 
@@ -103,49 +125,3 @@ def test_count_files():
     assert result["audio_count"] == 1
     assert result["other_count"] == 1
     assert "txt" in result["other_file_types"]
-
-
-def test_deployments_summary(monkeypatch):
-    """
-    Test that deployments_summary returns a summary of deployments.
-    This function is actually covered in deployment_summary.py, so no longer needed
-    """
-    aws_credentials = {
-        "AWS_ACCESS_KEY_ID": "id",
-        "AWS_SECRET_ACCESS_KEY": "secret",
-        "AWS_REGION": "region",
-        "AWS_URL_ENDPOINT": "endpoint",
-        "UKCEH_username": "user",
-        "UKCEH_password": "pass",
-    }
-    monkeypatch.setattr(
-        api_utils,
-        "get_deployments",
-        lambda u, p: [
-            {
-                "deployment_id": "d1",
-                "status": "active",
-                "country": "uk",
-                "country_code": "UK",
-            }
-        ],
-    )
-    monkeypatch.setattr(
-        api_utils,
-        "count_files",
-        lambda *a, **k: {
-            "image_count": 1,
-            "audio_count": 0,
-            "other_count": 0,
-            "other_file_types": [],
-        },
-    )
-
-    class FakeSession:
-        def client(self, *a, **k):
-            return mock.Mock()
-
-    monkeypatch.setattr(api_utils.boto3, "Session", lambda **kwargs: FakeSession())
-    result = api_utils.deployments_summary_archive(aws_credentials)
-    assert "d1" in result
-    assert result["d1"]["file_types"]["image_count"] == 1

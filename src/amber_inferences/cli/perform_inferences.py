@@ -7,7 +7,9 @@ import torch
 import pandas as pd
 from pathlib import Path
 
+from amber_inferences.utils.config import load_credentials
 from amber_inferences.utils.custom_models import load_models
+from amber_inferences.utils.deployment_summary import deployment_data
 from amber_inferences.utils.inference_scripts import (
     download_and_analyse,
     initialise_session,
@@ -86,10 +88,19 @@ def main(
         print(f"All images already processed in {csv_file}")
         return
 
+    credentials = load_credentials("./credentials.json")
+    dep = keys[0].split("/")[0]
+    dep_data = deployment_data(
+        credentials,
+        subset_countries=[bucket_name],
+        subset_deployments=[dep],
+        include_file_count=False,
+    )[dep]
+
     download_and_analyse(
         keys=keys,
         output_dir=output_dir,
-        bucket_name=bucket_name,
+        dep_data=dep_data,
         client=client,
         remove_image=remove_image,
         perform_inference=perform_inference,
@@ -104,7 +115,7 @@ def main(
         device=device,
         order_data_thresholds=order_data_thresholds,
         top_n=top_n,
-        csv_file=str(csv_file),
+        csv_file=csv_file,
         verbose=verbose,
     )
 

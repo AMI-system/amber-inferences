@@ -14,23 +14,45 @@ def make_json_file(tmp_path, chunks):
     return str(json_path)
 
 
-def test_main_skips_processed(monkeypatch, tmp_path, capsys):
-    chunks = {"2021-01-01": ["img1.jpg", "img2.jpg", "img3.jpg"]}
+def test_main_skips_processed(monkeypatch, tmp_path):
+    chunks = {"2021-01-01": ["test/img1.jpg", "test/img2.jpg", "test/img3.jpg"]}
     json_file = make_json_file(tmp_path, chunks)
     csv_file = tmp_path / "results.csv"
     pd.DataFrame({"image_path": ["img1.jpg", "img2.jpg"]}).to_csv(csv_file, index=False)
 
     # Mocks
-    monkeypatch.setattr(perform_inferences, "initialise_session", lambda x: "client")
     monkeypatch.setattr(
-        perform_inferences, "download_and_analyse", lambda **kwargs: kwargs
+        perform_inferences,
+        "deployment_data",
+        lambda *a, **k: {
+            "test": {
+                "country": "test",
+                "country_code": "test",
+                "lat": "0",
+                "lon": "0",
+                "deployment_id": "dep000test",
+                "location_name": "test",
+                "bucket_name": "test",
+            }
+        },
+    )
+    monkeypatch.setattr(perform_inferences, "initialise_session", lambda x: "client")
+
+    processed_keys = {}
+
+    def fake_download_and_analyse(**kwargs):
+        processed_keys["keys"] = kwargs["keys"]
+        return kwargs
+
+    monkeypatch.setattr(
+        perform_inferences, "download_and_analyse", fake_download_and_analyse
     )
 
-    # This should skip img1 and img2, process img3
+    # Call main
     perform_inferences.main(
-        chunk_id=1,
+        chunk_id="1",
         json_file=json_file,
-        output_dir="/tmp/out",
+        output_dir=tmp_path,
         bucket_name="bucket",
         credentials_file="creds.json",
         remove_image=True,
@@ -46,12 +68,13 @@ def test_main_skips_processed(monkeypatch, tmp_path, capsys):
         device="cpu",
         order_data_thresholds=None,
         top_n=5,
-        csv_file=str(csv_file),
+        csv_file=csv_file,
         skip_processed=True,
-        verbose=True,
+        verbose=False,
     )
-    out = capsys.readouterr().out
-    assert "Skipping 2 images previously processed" in out
+
+    # Assertion
+    assert processed_keys["keys"] == ["test/img3.jpg"]
 
 
 def test_main_all_processed(monkeypatch, tmp_path, capsys):
@@ -63,6 +86,7 @@ def test_main_all_processed(monkeypatch, tmp_path, capsys):
     monkeypatch.setattr(
         perform_inferences, "download_and_analyse", lambda **kwargs: kwargs
     )
+
     perform_inferences.main(
         chunk_id=1,
         json_file=json_file,

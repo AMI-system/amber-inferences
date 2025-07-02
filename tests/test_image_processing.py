@@ -93,3 +93,60 @@ def test_get_gbif_image_no_results(monkeypatch):
     )
     img = image_processing.get_gbif_image("Panthera leo")
     assert img is None
+
+
+def test_get_gbif_image_media_but_load_fails(monkeypatch, capsys):
+    # Patch requests.get for species and occurrence
+    class DummyResp:
+        def __init__(self, json_data=None, content=None):
+            self._json = json_data
+            self.content = content
+
+        def json(self):
+            return self._json
+
+    monkeypatch.setattr(image_processing, "requests", mock.Mock())
+    image_processing.requests.get = mock.Mock(
+        side_effect=[
+            DummyResp(json_data={"usageKey": 123}),
+            DummyResp(
+                json_data={"results": [{"media": [{"identifier": "http://img.url"}]}]}
+            ),
+            DummyResp(content=b"fakebytes"),
+        ]
+    )
+    # Patch Image.open to raise an exception
+    monkeypatch.setattr(image_processing, "BytesIO", lambda b: io.BytesIO(b))
+    monkeypatch.setattr(image_processing, "Image", Image)
+
+    def raise_error(f):
+        raise Exception("fail to load")
+
+    monkeypatch.setattr(Image, "open", raise_error)
+    img = image_processing.get_gbif_image("Panthera leo")
+    assert img is None
+    assert "Error loading image for Panthera leo" in capsys.readouterr().out
+
+
+def test_image_annotation_img_none_reads_file(monkeypatch, tmp_path):
+    from PIL import Image
+    import amber_inferences.utils.image_processing as image_processing
+
+    # Create a blank image and save to disk
+    img = Image.new("RGB", (20, 20), color="white")
+    img_path = tmp_path / "test_img.jpg"
+    img.save(img_path)
+    # Patch plt.imshow to avoid display
+    monkeypatch.setattr(image_processing, "plt", mock.Mock(imshow=lambda img: None))
+    # Patch ImageDraw.Draw to a dummy to check it's called
+    called = {}
+    orig_draw = image_processing.ImageDraw.Draw
+
+    def fake_draw(img_arg):
+        called["called"] = True
+        return orig_draw(img_arg)
+
+    monkeypatch.setattr(image_processing.ImageDraw, "Draw", fake_draw)
+    # Call with img=None, should read from file
+    image_processing.image_annotation(str(img_path), img=None, boxes=[])
+    assert called["called"]
