@@ -2,6 +2,7 @@ import pytest
 from unittest import mock
 
 import amber_inferences.utils.deployment_summary as deployment_summary
+from amber_inferences.utils.api_utils import get_deployments
 
 
 def make_fake_deployments():
@@ -43,7 +44,7 @@ def test_get_deployments_success(monkeypatch):
             },
         )(),
     )
-    out = deployment_summary.get_deployments("user", "pass")
+    out = get_deployments("user", "pass")
     assert isinstance(out, list)
     assert any(d["deployment_id"] == "dep1" for d in out)
 
@@ -59,7 +60,7 @@ def test_get_deployments_http_error(monkeypatch):
         deployment_summary.requests, "post", lambda *a, **k: FakeResponse()
     )
     with pytest.raises(SystemExit):
-        deployment_summary.get_deployments("user", "pass")
+        get_deployments("user", "pass")
 
 
 def test_count_files(monkeypatch):
@@ -71,6 +72,31 @@ def test_count_files(monkeypatch):
     assert result["image_count"] == 1
     assert result["audio_count"] == 1
     assert "a.jpg" in result["keys"]
+
+
+def test_count_files_empty(monkeypatch):
+    s3_client = mock.Mock()
+    s3_client.list_objects_v2.return_value = {"Contents": [], "IsTruncated": False}
+    result = deployment_summary.count_files(s3_client, "bucket", "prefix")
+    assert result["image_count"] == 0
+    assert result["audio_count"] == 0
+    assert result["keys"] == []
+
+
+def test_count_files_multiple_pages(monkeypatch):
+    s3_client = mock.Mock()
+    s3_client.list_objects_v2.side_effect = [
+        {
+            "Contents": [{"Key": "a.jpg"}],
+            "IsTruncated": True,
+            "NextContinuationToken": "tok1",
+        },
+        {"Contents": [{"Key": "b.wav"}], "IsTruncated": False},
+    ]
+    result = deployment_summary.count_files(s3_client, "bucket", "prefix")
+    assert set(result["keys"]) == {"a.jpg", "b.wav"}
+    assert result["image_count"] == 1
+    assert result["audio_count"] == 1
 
 
 def test_deployment_data(monkeypatch):
@@ -106,7 +132,7 @@ def test_deployment_data(monkeypatch):
     assert out["dep1"]["audio_count"] == 1
 
 
-def test_deployment_data_subset_deployment_id(monkeypatch):
+def test_deployment_data_country_code(monkeypatch):
     creds = {
         "UKCEH_username": "user",
         "UKCEH_password": "pass",
@@ -116,17 +142,31 @@ def test_deployment_data_subset_deployment_id(monkeypatch):
         "AWS_URL_ENDPOINT": "endpoint",
     }
     monkeypatch.setattr(
-        deployment_summary, "get_deployments", lambda u, p: make_fake_deployments()
+        deployment_summary,
+        "get_deployments",
+        lambda u, p: [
+            {
+                "deployment_id": "dep1",
+                "status": "active",
+                "country": "UK",
+                "country_code": "GB",
+                "location_name": "loc1",
+            },
+            {
+                "deployment_id": "dep2",
+                "status": "active",
+                "country": "Panama",
+                "country_code": "PA",
+                "location_name": "loc2",
+            },
+        ],
     )
 
     class FakeSession:
         def client(self, *a, **k):
             class FakeS3:
                 def list_objects_v2(self, **kwargs):
-                    return {
-                        "Contents": [{"Key": "a.jpg"}, {"Key": "b.wav"}],
-                        "IsTruncated": False,
-                    }
+                    return {"Contents": [], "IsTruncated": False}
 
             return FakeS3()
 
@@ -134,11 +174,51 @@ def test_deployment_data_subset_deployment_id(monkeypatch):
         deployment_summary.boto3, "Session", lambda **kwargs: FakeSession()
     )
     out = deployment_summary.deployment_data(
-        creds, subset_deployments=["dep1"], include_file_count=True
+        creds, subset_countries=["GB"], include_file_count=False
     )
-    assert list(out.keys()) == ["dep1"]
-    assert out["dep1"]["image_count"] == 1
-    assert out["dep1"]["audio_count"] == 1
+    assert "dep1" in out
+    assert out["dep1"]["country_code"] == "GB"
+
+
+def test_deployment_data_subset_deployments_empty(monkeypatch, capsys):
+    creds = {
+        "UKCEH_username": "user",
+        "UKCEH_password": "pass",
+        "AWS_ACCESS_KEY_ID": "id",
+        "AWS_SECRET_ACCESS_KEY": "secret",
+        "AWS_REGION": "region",
+        "AWS_URL_ENDPOINT": "endpoint",
+    }
+    monkeypatch.setattr(
+        deployment_summary,
+        "get_deployments",
+        lambda u, p: [
+            {
+                "deployment_id": "dep1",
+                "status": "active",
+                "country": "UK",
+                "country_code": "UK",
+                "location_name": "loc1",
+            }
+        ],
+    )
+
+    class FakeSession:
+        def client(self, *a, **k):
+            class FakeS3:
+                def list_objects_v2(self, **kwargs):
+                    return {"Contents": [], "IsTruncated": False}
+
+            return FakeS3()
+
+    monkeypatch.setattr(
+        deployment_summary.boto3, "Session", lambda **kwargs: FakeSession()
+    )
+    out = deployment_summary.deployment_data(
+        creds, subset_deployments=[], include_file_count=False
+    )
+    assert out == {}
+    assert "No deployments found" in capsys.readouterr().out
 
 
 def test_invalid_deployment_subset(monkeypatch):
@@ -321,3 +401,168 @@ def test_print_deployments(monkeypatch, capsys):
     out = capsys.readouterr().out
     assert "Deployment ID: dep1" in out
     assert "images and" in out
+
+
+def test_print_deployments_country_warning(monkeypatch, capsys):
+    creds = {
+        "UKCEH_username": "user",
+        "UKCEH_password": "pass",
+        "AWS_ACCESS_KEY_ID": "id",
+        "AWS_SECRET_ACCESS_KEY": "secret",
+        "AWS_REGION": "region",
+        "AWS_URL_ENDPOINT": "endpoint",
+    }
+    monkeypatch.setattr(
+        deployment_summary,
+        "get_deployments",
+        lambda u, p: [
+            {
+                "deployment_id": "dep1",
+                "status": "active",
+                "country": "UK",
+                "country_code": "UK",
+                "location_name": "loc1",
+            }
+        ],
+    )
+
+    class FakeSession:
+        def client(self, *a, **k):
+            class FakeS3:
+                def list_objects_v2(self, **kwargs):
+                    return {"Contents": [], "IsTruncated": False}
+
+            return FakeS3()
+
+    monkeypatch.setattr(
+        deployment_summary.boto3, "Session", lambda **kwargs: FakeSession()
+    )
+    deployment_summary.print_deployments(creds, subset_countries=["Atlantis"])
+    out = capsys.readouterr().out
+    assert "WARNING: Atlantis does not have any" in out
+
+
+def test_print_deployments_actuve(monkeypatch, capsys):
+    creds = {
+        "UKCEH_username": "user",
+        "UKCEH_password": "pass",
+        "AWS_ACCESS_KEY_ID": "id",
+        "AWS_SECRET_ACCESS_KEY": "secret",
+        "AWS_REGION": "region",
+        "AWS_URL_ENDPOINT": "endpoint",
+    }
+    monkeypatch.setattr(
+        deployment_summary,
+        "get_deployments",
+        lambda u, p: [
+            {
+                "deployment_id": "dep1",
+                "status": "inactive",
+                "country": "UK",
+                "country_code": "UK",
+                "location_name": "loc1",
+            },
+            {
+                "deployment_id": "dep2",
+                "status": "active",
+                "country": "UK",
+                "country_code": "UK",
+                "location_name": "loc2",
+            },
+        ],
+    )
+
+    class FakeSession:
+        def client(self, *a, **k):
+            class FakeS3:
+                def list_objects_v2(self, **kwargs):
+                    return {"Contents": [], "IsTruncated": False}
+
+            return FakeS3()
+
+    monkeypatch.setattr(
+        deployment_summary.boto3, "Session", lambda **kwargs: FakeSession()
+    )
+    deployment_summary.print_deployments(
+        creds, subset_countries=["UK"], include_inactive=True
+    )
+    out = capsys.readouterr().out
+    assert "active deployments" not in out
+    assert "2 deployments" in out
+
+
+def test_print_deployments_print_file_count(monkeypatch, capsys):
+    creds = {
+        "UKCEH_username": "user",
+        "UKCEH_password": "pass",
+        "AWS_ACCESS_KEY_ID": "id",
+        "AWS_SECRET_ACCESS_KEY": "secret",
+        "AWS_REGION": "region",
+        "AWS_URL_ENDPOINT": "endpoint",
+    }
+    monkeypatch.setattr(
+        deployment_summary,
+        "get_deployments",
+        lambda u, p: [
+            {
+                "deployment_id": "dep1",
+                "status": "active",
+                "country": "UK",
+                "country_code": "UK",
+                "location_name": "loc1",
+            }
+        ],
+    )
+
+    class FakeSession:
+        def client(self, *a, **k):
+            class FakeS3:
+                def list_objects_v2(self, **kwargs):
+                    return {
+                        "Contents": [{"Key": "a.jpg"}, {"Key": "b.wav"}],
+                        "IsTruncated": False,
+                    }
+
+            return FakeS3()
+
+    monkeypatch.setattr(
+        deployment_summary.boto3, "Session", lambda **kwargs: FakeSession()
+    )
+    deployment_summary.print_deployments(creds, print_file_count=True)
+    out = capsys.readouterr().out
+    assert " - This deployment has 1 images and 1 audio files." in out
+    assert "Uk (UK) has 1 active deployment" in out
+
+
+def test_main(monkeypatch, tmp_path):
+    # Patch print_deployments to record call
+    called = {}
+
+    def fake_print_deployments(*a, **k):
+        called["called"] = True
+        called["args"] = a
+        called["kwargs"] = k
+
+    monkeypatch.setattr(deployment_summary, "print_deployments", fake_print_deployments)
+    creds = {
+        "UKCEH_username": "user",
+        "UKCEH_password": "pass",
+        "AWS_ACCESS_KEY_ID": "id",
+        "AWS_SECRET_ACCESS_KEY": "secret",
+        "AWS_REGION": "region",
+        "AWS_URL_ENDPOINT": "endpoint",
+    }
+    cred_path = tmp_path / "creds.json"
+    import json
+
+    with open(cred_path, "w") as f:
+        json.dump(creds, f)
+    import sys
+
+    sys_argv = sys.argv
+    sys.argv = ["prog", "--credentials_file", str(cred_path)]
+    try:
+        deployment_summary.main()
+    finally:
+        sys.argv = sys_argv
+    assert called["called"]
