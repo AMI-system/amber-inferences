@@ -51,7 +51,7 @@ def count_files(s3_client, bucket_name, prefix):
 
         # count files by type
         for obj in page.get("Contents", []):
-            if obj["Key"].endswith(".jpg"):
+            if obj["Key"].endswith((".jpeg", ".jpg")):
                 image_count += 1
             elif obj["Key"].endswith(".wav"):
                 audio_count += 1
