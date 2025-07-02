@@ -1,7 +1,7 @@
 import torch
 import numpy as np
 import pandas as pd
-
+import unittest.mock as mock
 import amber_inferences.utils.tracking as tracking
 
 
@@ -128,3 +128,122 @@ def test_track_id_calc():
     out = tracking.track_id_calc(df, cost_threshold=1)
     assert "track_id" in out.columns
     assert out["track_id"].nunique() >= 1
+
+
+def test_track_id_calc_first_last_included():
+    # Simulate a sequence of 3 images with crops, so first and last are unique
+    df = pd.DataFrame(
+        {
+            "previous_image": ["img1", "img2", "img2"],
+            "best_match_crop": ["crop1", "crop2", "crop1"],
+            "image_path": ["img2", "img3", "img3"],
+            "crop_status": ["crop1", "crop1", "crop2"],
+            "cnn_cost": [0.1, 0.2, 0.1],
+            "iou_cost": [0.1, 0.2, 0.1],
+            "box_ratio_cost": [0.1, 0.2, 0.1],
+            "dist_ratio_cost": [0.1, 0.2, 0.1],
+            "total_cost": [0.4, 0.8, 0.4],
+        }
+    )
+    out = tracking.track_id_calc(df, cost_threshold=1)
+
+    assert out["track_id"].nunique() == 2, "There should be 2 unique track IDs"
+    assert (
+        out.loc[
+            (out["image_path"] == "img3") & (out["crop_id"] == "crop2"), "track_id"
+        ].values[0]
+        == out.loc[
+            (out["image_path"] == "img2") & (out["crop_id"] == "crop1"), "track_id"
+        ].values[0]
+    )
+    assert set(out["image_path"]) == set(
+        list(set(df["image_path"])) + list(set(df["previous_image"]))
+    )
+    assert set(out["crop_id"]) == set(
+        list(set(df["crop_status"])) + list(set(df["best_match_crop"]))
+    )
+
+    # check all df[['image_path', 'crop_status']] in out[['image_path', 'crop_id']]
+    df_pairs = set(tuple(x) for x in df[["image_path", "crop_status"]].values)
+    out_pairs = set(tuple(x) for x in out[["image_path", "crop_id"]].values)
+    assert df_pairs.issubset(
+        out_pairs
+    ), "All (image_path, crop_status) pairs from df should be in out (image_path, crop_id)"
+
+    df_pairs = set(tuple(x) for x in df[["previous_image", "best_match_crop"]].values)
+    out_pairs = set(tuple(x) for x in out[["image_path", "crop_id"]].values)
+    assert df_pairs.issubset(
+        out_pairs
+    ), "All (image_path, crop_status) pairs from df should be in out (image_path, crop_id)"
+
+
+def test_extract_embedding(monkeypatch):
+    import torch
+    from PIL import Image
+    import numpy as np
+
+    # Dummy crop (PIL image)
+    crop = Image.fromarray(np.ones((300, 300, 3), dtype=np.uint8) * 255)
+
+    # Dummy model returns a tensor
+    class DummyModel:
+        def __call__(self, x):
+            return torch.ones((1, 10, 1, 1))
+
+    model = DummyModel()
+    device = "cpu"
+    # Patch transforms.Compose to identity
+    monkeypatch.setattr(
+        tracking,
+        "transforms",
+        mock.Mock(Compose=lambda x: lambda y: torch.ones((3, 300, 300))),
+    )
+
+    # Patch torch.no_grad to context manager
+    class DummyNoGrad:
+        def __enter__(self):
+            return None
+
+        def __exit__(self, *a):
+            return None
+
+    monkeypatch.setattr(tracking.torch, "no_grad", DummyNoGrad)
+    # Patch l2_normalize to identity
+    monkeypatch.setattr(tracking, "l2_normalize", lambda x: x)
+    # Patch .to to identity
+    monkeypatch.setattr(torch.Tensor, "to", lambda self, device: self)
+    features = tracking.extract_embedding(crop, model, device)
+    assert isinstance(features, np.ndarray) or isinstance(features, torch.Tensor)
+
+
+def test_crop_costs(monkeypatch):
+    # Setup dummy embedding_list
+    embedding_list = {
+        "img1": {
+            "c1": {
+                "embedding": np.array([1, 0]),
+                "image_path": "img1",
+                "crop": "c1",
+                "box": {"xmin": 0, "ymin": 0, "xmax": 1, "ymax": 1},
+                "image_size": (10, 10),
+            }
+        },
+        "img2": {
+            "c2": {
+                "embedding": np.array([1, 0]),
+                "image_path": "img2",
+                "crop": "c2",
+                "box": {"xmin": 0, "ymin": 0, "xmax": 1, "ymax": 1},
+                "image_size": (10, 10),
+            }
+        },
+    }
+    # Patch calculate_cost to return a known DataFrame
+    monkeypatch.setattr(
+        tracking, "calculate_cost", lambda c_a, c_b: pd.DataFrame({"foo": [1]})
+    )
+    # Patch tqdm to identity
+    monkeypatch.setattr(tracking, "tqdm", lambda x: x)
+    df = tracking.crop_costs(embedding_list)
+    assert isinstance(df, pd.DataFrame)
+    assert "foo" in df.columns

@@ -208,7 +208,7 @@ def track_id_calc(best_matches, cost_threshold=1):
     # Make a copy and rename the relevant columns
     best_matches = best_matches.copy()
     best_matches["base_image_path"] = best_matches["image_path"].apply(
-        lambda x: os.path.dirname(x)
+        lambda x: os.path.basename(str(x))
     )
 
     best_matches["image1"] = best_matches["base_image_path"]
@@ -234,7 +234,7 @@ def track_id_calc(best_matches, cost_threshold=1):
     first_frame["crop2"] = first_frame["crop1"]
     first_frame["total_cost"] = 0
 
-    best_matches = pd.concat([best_matches, first_frame], ignore_index=True)
+    best_matches = pd.concat([first_frame, best_matches], ignore_index=True)
     best_matches = best_matches.loc[best_matches["total_cost"] != "",]
     best_matches = best_matches.loc[best_matches["total_cost"].notna(),]
 
@@ -274,7 +274,7 @@ def track_id_calc(best_matches, cost_threshold=1):
     # Assemble the final output rows
     output_rows = []
     for node in all_nodes:
-        image_path, crop_id = node.rsplit("|", 2)
+        image_path, crop_id = node.rsplit("|", maxsplit=1)
         output_rows.append(
             {
                 "image_path": image_path,
