@@ -954,6 +954,14 @@ def test__get_best_matches_with_previous(monkeypatch):
     # Patch calculate_cost and find_best_matches to return a known DataFrame
     monkeypatch.setattr(
         inference_scripts,
+        "get_previous_embedding",
+        lambda previous_image, verbose=False: {
+            "crop_1": {"embedding": [1, 2, 3]},
+            "crop_2": {"embedding": [4, 5, 6]},
+        },
+    )
+    monkeypatch.setattr(
+        inference_scripts,
         "calculate_cost",
         lambda c1, c2: pd.DataFrame(
             {
@@ -991,7 +999,7 @@ def test__get_best_matches_no_previous():
     assert isinstance(result, pd.DataFrame)
     assert (
         result.iloc[0]["best_match_crop"]
-        == "No crops from previous image. Tracking not possible."
+        == "No species crops from this/previous image. Tracking not possible."
     )
 
 
