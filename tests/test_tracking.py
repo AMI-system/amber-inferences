@@ -115,9 +115,9 @@ def test_track_id_calc():
     df = pd.DataFrame(
         {
             "previous_image": ["a", "b"],
-            "best_match_crop": [0, 1],
+            "best_match_crop": ["crop_a", "crop_b"],
             "image_path": ["b", "c"],
-            "crop_status": [1, 2],
+            "crop_status": ["crop_1", "crop_123"],
             "cnn_cost": [0.1, 0.2],
             "iou_cost": [0.1, 0.2],
             "box_ratio_cost": [0.1, 0.2],
