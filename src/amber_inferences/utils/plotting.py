@@ -91,8 +91,6 @@ def gif_creater(input_dir, output_path):
         raise ValueError(f"{output_path} must have a .gif extension")
     if not output_path.parent.exists():
         raise ValueError(f"Output directory {output_path.parent} does not exist")
-    if not output_path.parent.is_dir():
-        raise ValueError(f"Output path {output_path.parent} is not a directory")
 
     # Open images and convert to a sequence
     image_paths = sorted([p for p in input_dir.iterdir() if p.is_file()])
