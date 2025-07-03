@@ -3,6 +3,7 @@ import numpy as np
 import pandas as pd
 import unittest.mock as mock
 import amber_inferences.utils.tracking as tracking
+import math
 
 
 def test_l2_normalize():
@@ -247,3 +248,120 @@ def test_crop_costs(monkeypatch):
     df = tracking.crop_costs(embedding_list)
     assert isinstance(df, pd.DataFrame)
     assert "foo" in df.columns
+
+
+def test_crop_costs_pair_generation(monkeypatch):
+    # embedding_list with 2 images, 2 crops each
+    embedding_list = {
+        "img1": {
+            "c1": {
+                "embedding": np.array([1, 0]),
+                "image_path": "img1",
+                "crop": "c1",
+                "box": {"xmin": 0, "ymin": 0, "xmax": 1, "ymax": 1},
+                "image_size": (10, 10),
+            },
+            "c2": {
+                "embedding": np.array([0, 1]),
+                "image_path": "img1",
+                "crop": "c2",
+                "box": {"xmin": 0, "ymin": 0, "xmax": 1, "ymax": 1},
+                "image_size": (10, 10),
+            },
+        },
+        "img2": {
+            "c3": {
+                "embedding": np.array([1, 0]),
+                "image_path": "img2",
+                "crop": "c3",
+                "box": {"xmin": 0, "ymin": 0, "xmax": 1, "ymax": 1},
+                "image_size": (10, 10),
+            },
+            "c4": {
+                "embedding": np.array([0, 1]),
+                "image_path": "img2",
+                "crop": "c4",
+                "box": {"xmin": 0, "ymin": 0, "xmax": 1, "ymax": 1},
+                "image_size": (10, 10),
+            },
+        },
+    }
+    call_args = []
+
+    def fake_calculate_cost(c_a, c_b):
+        call_args.append((c_a["crop"], c_b["crop"]))
+        return pd.DataFrame({"foo": [1]})
+
+    monkeypatch.setattr(tracking, "calculate_cost", fake_calculate_cost)
+    monkeypatch.setattr(tracking, "tqdm", lambda x: x)
+    tracking.crop_costs(embedding_list)
+    # There should be 2*2 = 4 pairs between img1 and img2
+    assert len(call_args) == 4
+    expected_pairs = set((a, b) for a in ["c1", "c2"] for b in ["c3", "c4"])
+    assert set(call_args) == expected_pairs
+
+
+def test_crop_larger_threshold():
+    # Test with a larger threshold
+    df = pd.DataFrame(
+        {
+            "image_path": ["img1", "img2", "img3", "img3", "img4"],
+            "crop_status": ["crop1", "crop1", "crop1", "crop2", "crop1"],
+            "previous_image": [None, "img1", "img2", "img2", "img3"],
+            "best_match_crop": [None, "crop1", "crop1", "crop1", "crop2"],
+            "total_cost": [None, 0.8, 0.1, 1.9, 0.5],
+        }
+    )
+    expected_out = pd.DataFrame(
+        {
+            "image_path": ["img1", "img2", "img3", "img3", "img4"],
+            "crop_id": ["crop1", "crop1", "crop1", "crop2", "crop1"],
+            "track_id": [
+                "Track_00000",
+                "Track_00000",
+                "Track_00000",
+                "Track_00001",
+                "Track_00001",
+            ],
+            "total_cost": [math.inf, 0.8, 0.1, 1.9, 0.5],
+        }
+    )
+    out = tracking.track_id_calc(df, cost_threshold=1)
+    assert len(out["track_id"].values) == df.shape[0]
+    assert all(out["image_path"].values == expected_out["image_path"].values)
+    assert all(out["crop_id"].values == expected_out["crop_id"].values)
+    assert all(out["track_id"].values == expected_out["track_id"].values)
+    assert all(out["total_cost"].values == expected_out["total_cost"].values)
+
+
+def test_exact_matches():
+    # Test with a larger threshold
+    df = pd.DataFrame(
+        {
+            "image_path": ["img1", "img2", "img3", "img3", "img3"],
+            "crop_status": ["crop1", "crop1", "crop1", "crop2", "crop3"],
+            "previous_image": [None, "img1", "img2", "img2", "img2"],
+            "best_match_crop": [None, "crop1", "crop1", "crop1", "crop1"],
+            "total_cost": [None, 0.8, 0.1, 0.05, 0.05],
+        }
+    )
+    expected_out = pd.DataFrame(
+        {
+            "image_path": ["img1", "img2", "img3", "img3", "img3"],
+            "crop_id": ["crop1", "crop1", "crop1", "crop2", "crop3"],
+            "track_id": [
+                "Track_00000",
+                "Track_00000",
+                "Track_00002",
+                "Track_00000",
+                "Track_00001",
+            ],
+            "total_cost": [math.inf, 0.8, 0.1, 0.05, 0.05],
+        }
+    )
+    out = tracking.track_id_calc(df, cost_threshold=1)
+    assert len(out["track_id"].values) == df.shape[0]
+    assert all(out["image_path"].values == expected_out["image_path"].values)
+    assert all(out["crop_id"].values == expected_out["crop_id"].values)
+    assert set(out["track_id"].values) == set(expected_out["track_id"].values)
+    assert all(out["total_cost"].values == expected_out["total_cost"].values)

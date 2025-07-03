@@ -215,31 +215,19 @@ def track_id_calc(best_matches, cost_threshold=1):
     best_matches["image2"] = best_matches["previous_image"]
     best_matches["crop1"] = best_matches["crop_status"]
     best_matches["crop2"] = best_matches["best_match_crop"]
+    best_matches.sort_values(by=["image1", "crop1"], inplace=True)
+    best_matches.reset_index(drop=True, inplace=True)
+    best_matches["total_cost"] = best_matches["total_cost"].astype(float)
 
-    # dummy populate the first frame values, in order for tracks to start there
-    # this works by tracking these crops to themselves
-    first_frame = best_matches[
-        best_matches["image1"] == best_matches["image1"].values[0]
-    ].copy()
-
-    best_matches = best_matches.loc[best_matches["total_cost"] != "",]
-    best_matches = best_matches.loc[best_matches["total_cost"].notna(),]
-
-    first_frame = first_frame[
-        (first_frame["image1"] + first_frame["crop1"]).isin(
-            best_matches["image2"] + best_matches["crop2"]
-        )
-    ]
-    first_frame["image2"] = first_frame["image1"]
-    first_frame["crop2"] = first_frame["crop1"]
-    first_frame["total_cost"] = 0
-
-    best_matches = pd.concat([first_frame, best_matches], ignore_index=True)
+    # best_matches = pd.concat([first_frame, best_matches], ignore_index=True)
     best_matches = best_matches.loc[best_matches["total_cost"] != "",]
     best_matches = best_matches.loc[best_matches["total_cost"].notna(),]
 
     # Filter based on the cost threshold
     filtered_matches = best_matches[best_matches["total_cost"] < cost_threshold]
+    filtered_matches = filtered_matches.sort_values(
+        "total_cost", ascending=True
+    ).drop_duplicates(subset=["image2", "crop2"], keep="first")
 
     def node_id(image_path, crop_id):
         return f"{image_path}|{crop_id}"
@@ -266,12 +254,13 @@ def track_id_calc(best_matches, cost_threshold=1):
     # Create lookup for cost (minimum per crop node)
     cost_lookup = {}
     for _, row in best_matches.iterrows():
-        for prefix in ["1", "2"]:
-            nid = node_id(row[f"image{prefix}"], row[f"crop{prefix}"])
-            cost = row["total_cost"]
+        nid = node_id(row["image1"], row["crop1"])
+        cost = row["total_cost"]
+        # Only assign cost to image2|crop2 (the "current" image)
+        if pd.notna(cost) and cost != "":
             cost_lookup[nid] = min(cost_lookup.get(nid, float("inf")), cost)
 
-    # Assemble the final output rows
+    # Assign unique track IDs to any node not in track_mapping
     output_rows = []
     for node in all_nodes:
         image_path, crop_id = node.rsplit("|", maxsplit=1)
@@ -282,13 +271,13 @@ def track_id_calc(best_matches, cost_threshold=1):
                 "track_id": track_mapping.get(
                     node
                 ),  # May be None if unmatched under threshold
-                "total_cost": cost_lookup.get(node),
+                "total_cost": cost_lookup.get(node, float("inf")),
             }
         )
 
     output_df = pd.DataFrame(output_rows)
 
-    # Assign unique track IDs to unmatched crops
+    # Assign unique track IDs to unmatched crops (including those > threshold)
     max_existing_id = max(
         [int(tid.replace("Track_", "")) for tid in output_df["track_id"].dropna()],
         default=-1,
@@ -300,6 +289,10 @@ def track_id_calc(best_matches, cost_threshold=1):
         for i in range(max_existing_id + 1, max_existing_id + 1 + unmatched_mask.sum())
     ]
     output_df.loc[unmatched_indices, "track_id"] = new_ids
+
+    # sort by image_path and crop_id
+    output_df.sort_values(by=["image_path", "crop_id"], inplace=True)
+    output_df.reset_index(drop=True, inplace=True)
 
     return output_df
 
