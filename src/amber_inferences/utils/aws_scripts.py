@@ -17,7 +17,20 @@ from amber_inferences.utils.inference_scripts import perform_inf
 
 def list_objects(session, bucket_name, prefix, username, password):
     """
-    List all objects in an S3 bucket with a specific prefix.
+    List all objects in an S3 bucket with a specific prefix using HTTP Basic Auth.
+
+    Args:
+        session: Boto3 session (unused, for interface compatibility).
+        bucket_name (str): Name of the S3 bucket.
+        prefix (str): Prefix to filter objects.
+        username (str): Username for authentication.
+        password (str): Password for authentication.
+
+    Returns:
+        list: List of objects (JSON-decoded response).
+
+    Raises:
+        SystemExit: If authentication or request fails.
     """
 
     try:
@@ -55,7 +68,25 @@ def download_object(
     csv_file="results.csv",
 ):
     """
-    Download a single object from S3 synchronously.
+    Download a single object from S3 synchronously and optionally run inference.
+
+    Args:
+        s3_client: Boto3 S3 client.
+        dep_info (dict): Deployment info (must include 'country_code').
+        key (str): S3 object key.
+        download_path (str): Local path to save the file.
+        perform_inference (bool): Whether to run inference after download.
+        remove_image (bool): Whether to delete the image after processing.
+        localisation_model, binary_model, order_model: Model objects for inference.
+        order_labels: Labels for order model.
+        country (str): Country code.
+        region (str): Region name.
+        device: Torch device.
+        order_data_thresholds: Thresholds for order model.
+        csv_file (str): Path to results CSV.
+
+    Returns:
+        None
     """
 
     # Configure the transfer to optimize the download
@@ -100,6 +131,16 @@ def download_object(
 
 
 def get_datetime_from_string(input):
+    """
+    Extract a datetime object from a string formatted as '...-YYYYMMDDHHMMSS'.
+
+    Args:
+        input (str): Input string containing a date/time.
+
+    Returns:
+        datetime: Parsed datetime object.
+    """
+
     in_sting = input.replace("-snapshot.jpg", "")
     dt = in_sting.split("-")[-1]
     dt = datetime.strptime(dt, "%Y%m%d%H%M%S")
@@ -125,7 +166,26 @@ def download_batch(
     rerun_existing=False,
 ):
     """
-    Download a batch of objects from S3.
+    Download a batch of objects from S3, skipping already processed images.
+
+    Args:
+        s3_client: Boto3 S3 client.
+        bucket_name (str): Name of the S3 bucket.
+        keys (list): List of S3 object keys to download.
+        local_path (str): Local directory to save files.
+        perform_inference (bool): Whether to run inference after download.
+        remove_image (bool): Whether to delete images after processing.
+        localisation_model, binary_model, order_model: Model objects for inference.
+        order_labels: Labels for order model.
+        country (str): Country code.
+        region (str): Region name.
+        device: Torch device.
+        order_data_thresholds: Thresholds for order model.
+        csv_file (str): Path to results CSV.
+        rerun_existing (bool): If False, skip images already in results CSV.
+
+    Returns:
+        None
     """
 
     existing_df = pd.read_csv(csv_file, dtype="unicode")
@@ -187,7 +247,30 @@ def get_objects(
 ):
     """
     Fetch objects from the S3 bucket and download them synchronously or using threads.
+
+    Args:
+        session: Boto3 session.
+        aws_credentials (dict): AWS credentials (must include 'AWS_URL_ENDPOINT').
+        bucket_name (str): Name of the S3 bucket.
+        prefix (str): Prefix to filter objects.
+        local_path (str): Local directory to save files.
+        batch_size (int): Number of files to download per batch.
+        perform_inference (bool): Whether to run inference after download.
+        remove_image (bool): Whether to delete images after processing.
+        localisation_model, binary_model, order_model: Model objects for inference.
+        order_labels: Labels for order model.
+        country (str): Country code.
+        region (str): Region name.
+        device: Torch device.
+        order_data_thresholds: Thresholds for order model.
+        csv_file (str): Path to results CSV.
+        rerun_existing (bool): If False, skip images already in results CSV.
+        num_workers (int): Number of threads to use for downloading.
+
+    Returns:
+        None
     """
+
     s3_client = session.client("s3", endpoint_url=aws_credentials["AWS_URL_ENDPOINT"])
 
     paginator = s3_client.get_paginator("list_objects_v2")

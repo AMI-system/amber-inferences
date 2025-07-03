@@ -16,10 +16,19 @@ add_safe_globals({"SegmentationModel": SegmentationModel})
 
 
 class Resnet50_species(torch.nn.Module):
+    """
+    ResNet-50 model for species classification.
+
+    Args:
+        num_classes (int): Number of output classes.
+    """
+
     def __init__(self, num_classes):
         """
+        Initialise the ResNet-50 species classifier.
+
         Args:
-            config: provides parameters for model generation
+            num_classes (int): Number of output classes.
         """
         super(Resnet50_species, self).__init__()
         self.num_classes = num_classes
@@ -31,6 +40,15 @@ class Resnet50_species(torch.nn.Module):
         self.classifier = nn.Linear(out_dim, self.num_classes, bias=False)
 
     def forward(self, x):
+        """
+        Forward pass for the species classifier.
+
+        Args:
+            x (torch.Tensor): Input tensor.
+
+        Returns:
+            torch.Tensor: Output logits.
+        """
         x = self.backbone(x)
         x = self.avgpool(x)
         x = x.view(x.size(0), -1)
@@ -40,10 +58,24 @@ class Resnet50_species(torch.nn.Module):
 
 
 class ResNet50_order(nn.Module):
-    """ResNet-50 Architecture with pretrained weights"""
+    """
+    ResNet-50 model for order classification with optional CBAM and dropout.
+
+    Args:
+        use_cbam (bool): Whether to use CBAM (not implemented here).
+        image_depth (int): Number of input channels.
+        num_classes (int): Number of output classes.
+    """
 
     def __init__(self, use_cbam=True, image_depth=3, num_classes=20):
-        """Params init and build arch."""
+        """
+        Initialise the ResNet-50 order classifier.
+
+        Args:
+            use_cbam (bool): Whether to use CBAM (not implemented here).
+            image_depth (int): Number of input channels.
+            num_classes (int): Number of output classes.
+        """
         super(ResNet50_order, self).__init__()
 
         self.expansion = 4
@@ -66,7 +98,15 @@ class ResNet50_order(nn.Module):
         self.softmax_reg1 = nn.Linear(self.out_channels, num_classes)
 
     def forward(self, x):
-        """Forward propagation of pretrained ResNet-50."""
+        """
+        Forward propagation of pretrained ResNet-50 for order classification.
+
+        Args:
+            x (torch.Tensor): Input tensor.
+
+        Returns:
+            torch.Tensor: Output logits.
+        """
         x = self.model_ft(x)
 
         x = self.drop(x)  # Dropout to add regularization
@@ -78,6 +118,16 @@ class ResNet50_order(nn.Module):
 
 
 def load_loc_model(weights_path, device):
+    """
+    Load a Faster R-CNN localisation model from weights.
+
+    Args:
+        weights_path (str or Path): Path to the model weights file.
+        device (torch.device): Device to load the model on.
+
+    Returns:
+        torch.nn.Module: Loaded localisation model.
+    """
     if weights_path is None:
         return None
 
@@ -99,6 +149,17 @@ def load_loc_model(weights_path, device):
 
 
 def load_loc(localisation_model_path, device, verbose=False):
+    """
+    Load a localisation model, trying both Faster R-CNN and flatbug models.
+
+    Args:
+        localisation_model_path (str or Path): Path to the model weights file.
+        device (torch.device): Device to load the model on.
+        verbose (bool): Whether to print status messages.
+
+    Returns:
+        torch.nn.Module or flatbug.Predictor: Loaded localisation model, or None if loading fails.
+    """
     if localisation_model_path is None:
         return None
 
@@ -131,6 +192,17 @@ def load_loc(localisation_model_path, device, verbose=False):
 
 
 def load_binary(binary_model_path, device, verbose=False):
+    """
+    Load a binary (moth/non-moth) classification model from weights.
+
+    Args:
+        binary_model_path (str or Path): Path to the model weights file.
+        device (torch.device): Device to load the model on.
+        verbose (bool): Whether to print status messages.
+
+    Returns:
+        torch.nn.Module: Loaded binary classification model.
+    """
     if binary_model_path is None:
         return None
 
@@ -151,6 +223,21 @@ def load_binary(binary_model_path, device, verbose=False):
 
 
 def load_order(order_model_path, order_threshold_path, device, verbose=False):
+    """
+    Load an order classification model and its thresholds/labels from files.
+
+    Args:
+        order_model_path (str or Path): Path to the model weights file.
+        order_threshold_path (str or Path): Path to the CSV file with thresholds and labels.
+        device (torch.device): Device to load the model on.
+        verbose (bool): Whether to print status messages.
+
+    Returns:
+        tuple: (model, order_data_thresholds, order_labels)
+            model (torch.nn.Module): Loaded order model.
+            order_data_thresholds (pd.DataFrame): DataFrame with thresholds.
+            order_labels (list): List of class names.
+    """
     if order_model_path is None:
         return None, None, None
 
@@ -170,6 +257,20 @@ def load_order(order_model_path, order_threshold_path, device, verbose=False):
 
 
 def load_species(species_model_path, species_labels, device, verbose=False):
+    """
+    Load a species classification model and its label map from files.
+
+    Args:
+        species_model_path (str or Path): Path to the model weights file.
+        species_labels (str or Path): Path to the JSON file with label mapping.
+        device (torch.device): Device to load the model on.
+        verbose (bool): Whether to print status messages.
+
+    Returns:
+        tuple: (species_model, species_category_map)
+            species_model (torch.nn.Module): Loaded species model.
+            species_category_map (dict): Mapping from label to index.
+    """
     if species_model_path is None:
         return None, None
 
@@ -201,7 +302,20 @@ def load_models(
     verbose=False,
 ):
     """
-    Function to load in the relevant models from weight paths.
+    Load all relevant models from their weight paths and return as a dictionary.
+
+    Args:
+        device (torch.device): Device to load models on.
+        localisation_model_path (str or Path, optional): Path to localisation model weights.
+        binary_model_path (str or Path, optional): Path to binary model weights.
+        order_model_path (str or Path, optional): Path to order model weights.
+        order_threshold_path (str or Path, optional): Path to order model thresholds CSV.
+        species_model_path (str or Path, optional): Path to species model weights.
+        species_labels (str or Path, optional): Path to species label map JSON.
+        verbose (bool): Whether to print status messages.
+
+    Returns:
+        dict: Dictionary with loaded models and label/threshold data.
     """
     model_dict = {
         "localisation_model": None,

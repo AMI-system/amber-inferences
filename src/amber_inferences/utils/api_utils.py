@@ -3,13 +3,33 @@ import sys
 
 
 def get_buckets(s3_client):
-    """Get a list of all S3 buckets."""
+    """
+    Get a list of all S3 buckets.
+
+    Args:
+        s3_client: Boto3 S3 client.
+
+    Returns:
+        list: List of bucket names.
+    """
     response = s3_client.list_buckets()
     return [bucket["Name"] for bucket in response["Buckets"]]
 
 
 def get_deployments(username, password):
-    """Fetch deployments from the API with authentication."""
+    """
+    Fetch deployments from the API with authentication.
+
+    Args:
+        username (str): Username for authentication.
+        password (str): Password for authentication.
+
+    Returns:
+        list: List of deployments (JSON-decoded response).
+
+    Raises:
+        SystemExit: If authentication or request fails.
+    """
     try:
         url = "https://connect-apps.ceh.ac.uk/ami-data-upload/get-deployments/"
         response = requests.post(
@@ -28,6 +48,17 @@ def get_deployments(username, password):
 
 
 def get_deployment_names(username, password, bucket):
+    """
+    Get deployment IDs for a specific bucket (country code) using the API.
+
+    Args:
+        username (str): Username for authentication.
+        password (str): Password for authentication.
+        bucket (str): Country code (bucket name) to filter deployments.
+
+    Returns:
+        list: List of deployment IDs for the specified bucket.
+    """
     response = get_deployments(username, password)
     response = [x for x in response if x["country_code"].lower() == bucket.lower()]
     deployment_names = [x["deployment_id"] for x in response]
@@ -38,7 +69,17 @@ def get_deployment_names(username, password, bucket):
 
 
 def count_files(s3_client, bucket_name, prefix):
-    """Count number of files in a given S3 bucket with a prefix."""
+    """
+    Count number of files in a given S3 bucket with a prefix, grouped by type.
+
+    Args:
+        s3_client: Boto3 S3 client.
+        bucket_name (str): Name of the S3 bucket.
+        prefix (str): Prefix to filter objects.
+
+    Returns:
+        dict: Dictionary with counts for images, audio, and other file types.
+    """
     paginator = s3_client.get_paginator("list_objects_v2")
     operation_parameters = {"Bucket": bucket_name, "Prefix": prefix}
     page_iterator = paginator.paginate(**operation_parameters)

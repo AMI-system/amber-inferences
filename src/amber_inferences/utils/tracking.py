@@ -10,12 +10,27 @@ from tqdm import tqdm
 
 
 def l2_normalize(tensor):
+    """
+    Perform L2 normalization on a tensor.
+    Args:
+        tensor (torch.Tensor): Input tensor to normalize.
+    Returns:
+        torch.Tensor: L2-normalized tensor.
+    """
     norm = torch.norm(tensor, p=2)
     return tensor / norm if norm > 0 else tensor
 
 
 def extract_embedding(crop, model, device):
-    """Get the crop embedding"""
+    """
+    Extract a feature embedding from a crop using a model.
+    Args:
+        crop (PIL.Image.Image): Image crop to process.
+        model (torch.nn.Module): Model to extract features.
+        device (torch.device): Device to run the model on.
+    Returns:
+        np.ndarray: Normalized feature embedding as a numpy array.
+    """
     embedding_transform = transforms.Compose(
         [
             transforms.Resize((300, 300)),
@@ -39,8 +54,16 @@ def extract_embedding(crop, model, device):
 
 
 def iou(bb1, bb2) -> float:
-    """Finds intersection over union for a bounding box pair"""
-
+    """
+    Compute the Intersection over Union (IoU) for a pair of bounding boxes.
+    Args:
+        bb1 (list or tuple): [xmin, ymin, xmax, ymax] for box 1.
+        bb2 (list or tuple): [xmin, ymin, xmax, ymax] for box 2.
+    Returns:
+        float: IoU value between 0 and 1.
+    Raises:
+        AssertionError: If bounding box coordinates are invalid or IoU is out of bounds.
+    """
     assert bb1[0] < bb1[2], f"Issue in bounding box 1 x_annotation: {bb1[0]} < {bb1[2]}"
     assert bb1[1] < bb1[3], f"Issue in bounding box 1 y_annotation: {bb1[1]} < {bb1[3]}"
     assert bb2[0] < bb2[2], f"Issue in bounding box 2 x_annotation: {bb2[0]} < {bb2[2]}"
@@ -67,8 +90,16 @@ def iou(bb1, bb2) -> float:
 
 
 def box_ratio(bb1, bb2) -> float:
-    """Finds the ratio of the two bounding boxes"""
-
+    """
+    Compute the ratio of the areas of two bounding boxes (min/max).
+    Args:
+        bb1 (list or tuple): [xmin, ymin, xmax, ymax] for box 1.
+        bb2 (list or tuple): [xmin, ymin, xmax, ymax] for box 2.
+    Returns:
+        float: Area ratio between 0 and 1.
+    Raises:
+        AssertionError: If box ratio is out of bounds.
+    """
     bb1_area = (bb1[2] - bb1[0] + 1) * (bb1[3] - bb1[1] + 1)
     bb2_area = (bb2[2] - bb2[0] + 1) * (bb2[3] - bb2[1] + 1)
 
@@ -82,10 +113,17 @@ def box_ratio(bb1, bb2) -> float:
 
 
 def distance_ratio(bb1, bb2, img_diag: float) -> float:
-    """finds the distance between the two bounding boxes and normalizes
-    by the image diagonal length
     """
-
+    Compute the normalized distance between the centers of two bounding boxes.
+    Args:
+        bb1 (list or tuple): [xmin, ymin, xmax, ymax] for box 1.
+        bb2 (list or tuple): [xmin, ymin, xmax, ymax] for box 2.
+        img_diag (float): Diagonal length of the image for normalization.
+    Returns:
+        float: Normalized distance ratio between 0 and 1.
+    Raises:
+        AssertionError: If distance is greater than the image diagonal.
+    """
     centre_x_bb1 = bb1[0] + (bb1[2] - bb1[0]) / 2
     centre_y_bb1 = bb1[1] + (bb1[3] - bb1[1]) / 2
 
@@ -104,11 +142,15 @@ def distance_ratio(bb1, bb2, img_diag: float) -> float:
 
 def cosine_similarity(img1_ftrs, img2_ftrs) -> float:
     """
-    Finds cosine similarity between a pair of cropped images.
-
-    Uses the feature embeddings array computed from a CNN model.
+    Compute the cosine similarity between two feature vectors.
+    Args:
+        img1_ftrs (np.ndarray): Feature vector for image 1.
+        img2_ftrs (np.ndarray): Feature vector for image 2.
+    Returns:
+        float: Cosine similarity score between 0 and 1.
+    Raises:
+        AssertionError: If similarity is out of bounds.
     """
-
     cosine_sim = np.dot(img1_ftrs, img2_ftrs) / (
         np.linalg.norm(img1_ftrs) * np.linalg.norm(img2_ftrs)
     )
@@ -120,6 +162,15 @@ def cosine_similarity(img1_ftrs, img2_ftrs) -> float:
 def calculate_cost(crop1, crop2, w_cnn=1, w_iou=1, w_box=1, w_dis=1):
     """
     Calculate the cost between two crops based on their features and bounding boxes.
+    Args:
+        crop1 (dict): Crop dictionary with keys 'embedding', 'box', 'image_path', 'crop', 'image_size'.
+        crop2 (dict): Crop dictionary with keys 'embedding', 'box', 'image_path', 'crop', 'image_size'.
+        w_cnn (float): Weight for CNN feature cost.
+        w_iou (float): Weight for IoU cost.
+        w_box (float): Weight for box ratio cost.
+        w_dis (float): Weight for distance ratio cost.
+    Returns:
+        pd.DataFrame: DataFrame with cost components and total cost for the crop pair.
     """
     features1 = crop1["embedding"]
     features2 = crop2["embedding"]
@@ -178,7 +229,11 @@ def calculate_cost(crop1, crop2, w_cnn=1, w_iou=1, w_box=1, w_dis=1):
 
 def find_best_matches(df):
     """
-    Calculate the best match and cost for a crop and those from the previous image
+    Find the best match and cost for each crop and those from the previous image.
+    Args:
+        df (pd.DataFrame): DataFrame with cost information for crop pairs.
+    Returns:
+        pd.DataFrame: DataFrame with best matches for each crop.
     """
     # Keep only best match for each (image, crop)
     filtered_df = df.copy()
@@ -205,6 +260,14 @@ def find_best_matches(df):
 
 
 def track_id_calc(best_matches, cost_threshold=1):
+    """
+    Assign track IDs to crops based on best matches and a cost threshold.
+    Args:
+        best_matches (pd.DataFrame): DataFrame with best matches and costs.
+        cost_threshold (float): Maximum allowed cost for linking crops into the same track.
+    Returns:
+        pd.DataFrame: DataFrame with columns 'image_path', 'crop_id', 'track_id', 'total_cost'.
+    """
     # Make a copy and rename the relevant columns
     best_matches = best_matches.copy()
     best_matches["base_image_path"] = best_matches["image_path"].apply(
@@ -298,6 +361,13 @@ def track_id_calc(best_matches, cost_threshold=1):
 
 
 def crop_costs(embedding_list):
+    """
+    Compute costs for all pairs of crops in consecutive images.
+    Args:
+        embedding_list (dict): Dictionary mapping image paths to crop dictionaries.
+    Returns:
+        pd.DataFrame: DataFrame with cost information for all crop pairs.
+    """
     all_crop_pairs = []
     image_paths = list(embedding_list.keys())
 

@@ -4,6 +4,12 @@ from pathlib import Path
 
 
 def _get_font():
+    """
+    Attempt to load a bold DejaVuSans font for drawing text on images.
+    Falls back to the default PIL font if unavailable.
+    Returns:
+        PIL.ImageFont.FreeTypeFont or PIL.ImageFont.ImageFont: Loaded font object.
+    """
     try:
         if os.path.exists("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"):
             font_path = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
@@ -18,6 +24,16 @@ def _get_font():
 
 
 def _normalize_box(box, img, scale, default_colour):
+    """
+    Normalise bounding box coordinates to the image size and extract annotation color and label.
+    Args:
+        box (dict): Dictionary with keys 'x_min', 'y_min', 'x_max', 'y_max', and optionally 'ann_col', 'label'.
+        img (PIL.Image.Image): The image to which the box refers.
+        scale (bool): Whether to scale coordinates from 300x300 to the image's actual size.
+        default_colour (str): Default color to use if 'ann_col' is not specified in the box.
+    Returns:
+        tuple: (x0, y0, x1, y1, ann_col, label) with coordinates, color, and label.
+    """
     x0 = float(box["x_min"])
     y0 = float(box["y_min"])
     x1 = float(box["x_max"])
@@ -44,11 +60,13 @@ def image_annotation(
         boxes (list of dict): List of bounding boxes, each represented as a dictionary with keys:
             - "x_min", "y_min", "x_max", "y_max": Coordinates of the bounding box.
             - "label": Text label for the bounding box (optional).
-            - "ann_col": Color for the bounding box outline (optional, defaults to "grey").
+            - "ann_col": Color for the bounding box outline (optional, defaults to `default_colour`).
         scale (bool): If True, scales the bounding box coordinates based on the original image size.
         default_colour (str): Default color for bounding boxes if not specified in the box dict.
     Returns:
         PIL.Image.Image: Annotated image.
+    Raises:
+        ValueError: If `boxes` is not a list of dictionaries.
     """
     if not isinstance(boxes, list):
         raise ValueError("boxes must be a list of dictionaries")
@@ -75,7 +93,11 @@ def gif_creater(input_dir, output_path):
     Creates a GIF from a sequence of images in a directory.
     Args:
         input_dir (str or Path): Directory containing images to be converted to GIF.
-        output_path (str or Path): Path where the GIF will be saved.
+        output_path (str or Path): Path where the GIF will be saved (must end with .gif).
+    Raises:
+        ValueError: If input_dir/output_path are invalid or output_path does not end with .gif.
+    Returns:
+        None. The GIF is saved to output_path.
     """
     if not isinstance(input_dir, (str, Path)):
         raise ValueError("input_dir must be a string or Path object")

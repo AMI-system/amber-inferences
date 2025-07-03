@@ -8,6 +8,19 @@ import matplotlib.pyplot as plt
 
 
 def image_annotation(image_path, img=None, boxes={}):
+    """
+    Annotate an image with bounding boxes and optional labels, and display it using matplotlib.
+
+    Args:
+        image_path (str or Path): Path to the image file.
+        img (PIL.Image.Image, optional): Image object. If None, the image will be loaded from `image_path`.
+        boxes (list of dict): List of bounding boxes, each represented as a dictionary with keys:
+            - "x_min", "y_min", "x_max", "y_max": Coordinates of the bounding box.
+            - "label": Text label for the bounding box (optional).
+
+    Returns:
+        None. The annotated image is displayed using matplotlib.
+    """
     if img is None:
         image_path = Path(image_path)
         img = Image.open(image_path)
@@ -27,13 +40,28 @@ def image_annotation(image_path, img=None, boxes={}):
 
 
 def variance_of_laplacian(image):
-    # compute the Laplacian of the image and then return the focus
-    # measure, which is simply the variance of the Laplacian
+    """
+    Compute the variance of the Laplacian of an image, a measure of sharpness/focus.
+
+    Args:
+        image (np.ndarray): Input image (as a numpy array).
+
+    Returns:
+        float: Variance of the Laplacian (higher means sharper image).
+    """
     return cv2.Laplacian(image, cv2.CV_64F).var()
 
 
 def get_gbif_image(species_name):
-    """Fetches the first available image from GBIF for a given species."""
+    """
+    Fetch the first available image from GBIF for a given species name.
+
+    Args:
+        species_name (str): Scientific name of the species.
+
+    Returns:
+        PIL.Image.Image or None: The first available image, or None if not found or on error.
+    """
     search_url = f"https://api.gbif.org/v1/species/match?name={species_name}"
     response = requests.get(search_url).json()
 
