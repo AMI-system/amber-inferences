@@ -573,18 +573,81 @@ def _get_species_and_embedding(
 
 
 def _get_best_matches(previous_image, crop_status, embedding_list, verbose=False):
+    """
+    Find best matches for a crop in the previous image's embeddings.
+    If the crop_status is not present in embedding_list, return a DataFrame with
+    a clear message and do not attempt to load previous embedding.
+    """
+    if crop_status not in embedding_list:
+        if verbose:
+            print(
+                f"No embedding found for crop_status '{crop_status}'. Skipping previous embedding lookup."
+            )
+        return pd.DataFrame(
+            {
+                "previous_image": [None],
+                "best_match_crop": [
+                    f"No embedding found for crop_status '{crop_status}'. Tracking not possible."
+                ],
+                "cnn_cost": [""],
+                "iou_cost": [""],
+                "box_ratio_cost": [""],
+                "dist_ratio_cost": [""],
+                "total_cost": [""],
+            },
+            columns=[
+                "previous_image",
+                "best_match_crop",
+                "cnn_cost",
+                "iou_cost",
+                "box_ratio_cost",
+                "dist_ratio_cost",
+                "total_cost",
+            ],
+        )
+
     # load in embedding from the previous image
     previous_image_embedding = get_previous_embedding(previous_image, verbose)
-    print(previous_image_embedding)
 
     if len(previous_image_embedding) > 0:
         crop_similarities = pd.DataFrame({})
         for crop_1 in list(previous_image_embedding.keys()):
             c_1 = previous_image_embedding[crop_1]
-            c_2 = embedding_list[crop_status]
+            try:
+                c_2 = embedding_list[crop_status]
+            except KeyError:
+                if verbose:
+                    print(
+                        f"KeyError: crop_status '{crop_status}' not found in embedding_list."
+                    )
+                continue
             results_df = calculate_cost(c_1, c_2)
             crop_similarities = pd.concat([crop_similarities, results_df])
-        return find_best_matches(crop_similarities)
+        if not crop_similarities.empty:
+            return find_best_matches(crop_similarities)
+        else:
+            return pd.DataFrame(
+                {
+                    "previous_image": [None],
+                    "best_match_crop": [
+                        f"No valid matches found for crop_status '{crop_status}'."
+                    ],
+                    "cnn_cost": [""],
+                    "iou_cost": [""],
+                    "box_ratio_cost": [""],
+                    "dist_ratio_cost": [""],
+                    "total_cost": [""],
+                },
+                columns=[
+                    "previous_image",
+                    "best_match_crop",
+                    "cnn_cost",
+                    "iou_cost",
+                    "box_ratio_cost",
+                    "dist_ratio_cost",
+                    "total_cost",
+                ],
+            )
     else:
         return pd.DataFrame(
             {
