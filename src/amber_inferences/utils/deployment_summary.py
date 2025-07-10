@@ -10,33 +10,8 @@ credentials are loaded from a configuration file (credentials.json).
 import argparse
 import json
 import boto3
-import sys
-import requests
 
-
-# TODO: archive, used in api_utils
-def get_deployments(username, password):
-    """Fetch deployments from the API with authentication."""
-
-    try:
-        url = "https://connect-apps.ceh.ac.uk/ami-data-upload/get-deployments/"
-        response = requests.post(
-            url, data={"username": username, "password": password}, timeout=30
-        )
-        response.raise_for_status()
-        return response.json()
-    except requests.exceptions.HTTPError as err:
-        print(f"HTTP Error: {err}")
-        if response.status_code == 404:
-            print(
-                "App not available. Check at https://connect-apps.ceh.ac.uk/ami-data-upload/"
-            )
-        if response.status_code == 401:
-            print("Wrong username or password. Try again!")
-        sys.exit(1)
-    except Exception as err:
-        print(f"Error: {err}")
-        sys.exit(1)
+from amber_inferences.utils.api_utils import get_deployments
 
 
 def count_files(s3_client, bucket_name, prefix):
@@ -74,10 +49,6 @@ def count_files(s3_client, bucket_name, prefix):
 
     return {"keys": keys, "image_count": image_count, "audio_count": audio_count}
 
-    # for page in page_iterator:
-
-    # return {'image_count': image_count, 'audio_count': audio_count}
-
 
 def deployment_data(
     credentials,
@@ -110,15 +81,31 @@ def deployment_data(
 
     # Loop through each country to print deployment information
     all_countries = list(set([dep["country"].title() for dep in all_deployments]))
+    all_ccodes = list(set([dep["country_code"].title() for dep in all_deployments]))
 
     if subset_countries is not None:
         subset_countries = [x.title() for x in subset_countries]
-        not_included_countries = [x for x in subset_countries if x not in all_countries]
+        not_included_countries = [
+            x
+            for x in subset_countries
+            if (x not in all_countries) and (x not in all_ccodes)
+        ]
         for missing in not_included_countries:
             print(
                 f"\033[1mWARNING: {missing} does not have any {act_string}deployments, check spelling\033[0m"
             )
         all_countries = [x for x in all_countries if x in subset_countries]
+
+        # if country code was used
+        all_countries = all_countries + list(
+            set(
+                [
+                    x["country"].title()
+                    for x in all_deployments
+                    if x["country_code"].title() in subset_countries
+                ]
+            )
+        )
 
     deployment_data = {}
     for country in all_countries:
@@ -201,7 +188,7 @@ def print_deployments(
         not_included_countries = [x for x in subset_countries if x not in all_countries]
         for missing in not_included_countries:
             print(
-                f"\033[1mWARNING: {missing} does not have any {act_string}deployments, check spelling\033[0m"
+                f"WARNING: {missing} does not have any {act_string}deployments, check spelling"
             )
         all_countries = [x for x in all_countries if x in subset_countries]
 
@@ -209,14 +196,13 @@ def print_deployments(
         country_depl = [x for x in all_deployments if x["country"].title() == country]
         country_code = list(set([x["country_code"] for x in country_depl]))[0]
         print(
-            "\n\033[1m"
-            + country
+            country
             + " ("
             + country_code
             + ") has "
             + str(len(country_depl))
             + act_string
-            + "deployments:\033[0m"
+            + "deployments:"
         )
         all_deps = list(set([x["deployment_id"] for x in country_depl]))
 
@@ -239,17 +225,13 @@ def print_deployments(
                 total_images = total_images + counts["image_count"]
                 total_audio = total_audio + counts["audio_count"]
                 print(
-                    f" - This deployment has \033[1m{counts['image_count']}\033[0m"
-                    + f" images and \033[1m{counts['audio_count']}\033[0m audio files.\n"
+                    f" - This deployment has {counts['image_count']}"
+                    + f" images and {counts['audio_count']} audio files.\n"
                 )
 
         if print_file_count:
-            print(
-                f"\033[1m - {country} has {total_images}\033[0m images total\033[0m\n"
-            )
-            print(
-                f"\033[1m - {country} has {total_audio}\033[0m audio files total\033[0m\n"
-            )
+            print(f" - {country} has {total_images} images total\n")
+            print(f" - {country} has {total_audio} audio files total\n")
 
 
 def main():
@@ -276,7 +258,7 @@ def main():
     parser.add_argument(
         "--subset_countries",
         nargs="+",
-        help="Optional list to subset for specific countries (e.g. --subset_countries 'Panama' 'Thailand').",
+        help="Optional list to subset for specific countries using name/code(e.g. --subset_countries 'Panama' 'tha').",
         default=None,
     )
     args = parser.parse_args()

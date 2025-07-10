@@ -72,16 +72,10 @@ if __name__ == "__main__":
 
     if torch.cuda.is_available():
         device = torch.device("cuda:0")
-        print(
-            "\033[95m\033[1mCuda available, using GPU "
-            + "\N{White Heavy Check Mark}\033[0m\033[0m"
-        )
+        print("Cuda available, using GPU \N{White Heavy Check Mark}")
     else:
         device = torch.device("cpu")
-        print(
-            "\033[95m\033[1mCuda not available, using CPU "
-            + "\N{Cross Mark}\033[0m\033[0m"
-        )
+        print("Cuda not available, using CPU \N{Cross Mark}")
 
     if not args.binary_model_path.resolve().exists():
         raise FileNotFoundError(f"Model path not found: {args.binary_model_path}")

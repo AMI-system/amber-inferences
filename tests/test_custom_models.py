@@ -179,3 +179,255 @@ def test_load_models(monkeypatch):
     assert out["order_model_labels"] == "labels"
     assert out["species_model"] == "species"
     assert out["species_model_labels"] == "species_labels"
+
+
+def test_resnet50_species_init_and_forward(monkeypatch):
+    import torch
+
+    # Patch torchvision.models.resnet50 to a dummy model for fast test
+    class DummyResNet(torch.nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.fc = torch.nn.Linear(10, 10)
+            self._children = [
+                torch.nn.Conv2d(3, 10, 3),
+                torch.nn.ReLU(),
+                torch.nn.AdaptiveAvgPool2d((1, 1)),
+                torch.nn.Flatten(),
+            ]
+
+        def children(self):
+            return self._children
+
+        def forward(self, x):
+            return torch.ones((x.shape[0], 10, 1, 1))
+
+    monkeypatch.setattr(
+        custom_models.torchvision.models, "resnet50", lambda weights=None: DummyResNet()
+    )
+    # Create model
+    model = custom_models.Resnet50_species(num_classes=5)
+    # Check attributes
+    assert model.num_classes == 5
+    assert isinstance(model.backbone, torch.nn.Sequential)
+    assert isinstance(model.avgpool, torch.nn.AdaptiveAvgPool2d)
+    assert isinstance(model.classifier, torch.nn.Linear)
+    # Forward pass with dummy input
+    x = torch.randn(2, 3, 224, 224)
+    out = model(x)
+    assert out.shape == (2, 5)
+
+
+def test_resnet50_order_init_and_forward(monkeypatch):
+    import torch
+
+    # Patch models.resnet50 to a dummy model
+    class DummyResNet(torch.nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.fc = torch.nn.Linear(10, 10)
+
+        def forward(self, x):
+            return torch.ones((x.shape[0], 2048))
+
+    monkeypatch.setattr(
+        custom_models.models, "resnet50", lambda weights=None: DummyResNet()
+    )
+    model = custom_models.ResNet50_order(use_cbam=False, image_depth=3, num_classes=4)
+    # Check attributes
+    assert model.expansion == 4
+    assert model.out_channels == 512
+    assert isinstance(model.model_ft, torch.nn.Module)
+    # Forward pass
+    x = torch.randn(2, 3, 224, 224)
+    out = model(x)
+    assert out.shape == (2, 4)
+
+
+def test_load_loc_model_success(monkeypatch, tmp_path):
+    # Patch torch.load to return a dict with model_state_dict
+    class DummyPredictor:
+        def __init__(self, in_features, num_classes):
+            self.in_features = in_features
+
+        def load_state_dict(self, x):
+            self.loaded = True
+
+        def to(self, device):
+            return self
+
+        def eval(self):
+            return self
+
+    class DummyModel:
+        def __init__(self):
+            self.roi_heads = type("roi_heads", (), {})()
+            self.roi_heads.box_predictor = type("box_predictor", (), {})()
+            self.roi_heads.box_predictor.cls_score = type("cls_score", (), {})()
+            self.roi_heads.box_predictor.cls_score.in_features = 2
+
+        def load_state_dict(self, x):
+            self.loaded = True
+
+        def to(self, device):
+            return self
+
+        def eval(self):
+            return self
+
+    monkeypatch.setattr(
+        custom_models.torchvision.models.detection,
+        "fasterrcnn_resnet50_fpn",
+        lambda weights=None: DummyModel(),
+    )
+    monkeypatch.setattr(
+        custom_models.torchvision.models.detection,
+        "faster_rcnn",
+        type(
+            "faster_rcnn",
+            (),
+            {"FastRCNNPredictor": lambda in_features, num_classes: None},
+        ),
+    )
+    monkeypatch.setattr(
+        custom_models.torch,
+        "load",
+        lambda *a, **k: {"model_state_dict": {"foo": "bar"}},
+    )
+    model = custom_models.load_loc_model("fakepath", "cpu")
+    assert model is not None
+
+
+def test_load_loc_model_state_dict_fallback(monkeypatch):
+    # Patch torch.load to return a dict without model_state_dict
+    class DummyModel:
+        def __init__(self):
+            self.roi_heads = type("roi_heads", (), {})()
+            self.roi_heads.box_predictor = type("box_predictor", (), {})()
+            self.roi_heads.box_predictor.cls_score = type("cls_score", (), {})()
+            self.roi_heads.box_predictor.cls_score.in_features = 2
+
+        def load_state_dict(self, x):
+            self.loaded = True
+
+        def to(self, device):
+            return self
+
+        def eval(self):
+            return self
+
+    monkeypatch.setattr(
+        custom_models.torchvision.models.detection,
+        "fasterrcnn_resnet50_fpn",
+        lambda weights=None: DummyModel(),
+    )
+    monkeypatch.setattr(
+        custom_models.torchvision.models.detection,
+        "faster_rcnn",
+        type(
+            "faster_rcnn",
+            (),
+            {"FastRCNNPredictor": lambda in_features, num_classes: None},
+        ),
+    )
+    monkeypatch.setattr(custom_models.torch, "load", lambda *a, **k: {"foo": "bar"})
+    model = custom_models.load_loc_model("fakepath", "cpu")
+    assert model is not None
+
+
+def test_loc_return_none():
+    """Test that load_loc returns None if no path is provided."""
+    assert custom_models.load_loc(None, "cpu") is None
+
+
+def test_loc_return_localisation(monkeypatch, capsys):
+    class DummyModel:
+        def __init__(self):
+            self.roi_heads = type("roi_heads", (), {})()
+            self.roi_heads.box_predictor = type("box_predictor", (), {})()
+            self.roi_heads.box_predictor.cls_score = type("cls_score", (), {})()
+            self.roi_heads.box_predictor.cls_score.in_features = 2
+
+        def load_state_dict(self, x):
+            self.loaded = True
+
+        def to(self, device):
+            return self
+
+        def eval(self):
+            return self
+
+    monkeypatch.setattr(custom_models, "load_loc_model", lambda *a: DummyModel())
+    output = custom_models.load_loc("model.pt", "cpu", verbose=True)
+    assert isinstance(output, DummyModel)
+
+    # check that the print statement was called
+    out_capture = capsys.readouterr().out
+    assert "Loaded localisation model from" in out_capture
+    assert "DummyModel" in out_capture
+
+
+def test_loc_return_flatbug(monkeypatch, capsys):
+    class DummyModel:
+        def __init__(self):
+            self.roi_heads = type("roi_heads", (), {})()
+            self.roi_heads.box_predictor = type("box_predictor", (), {})()
+            self.roi_heads.box_predictor.cls_score = type("cls_score", (), {})()
+            self.roi_heads.box_predictor.cls_score.in_features = 2
+
+        def load_state_dict(self, x):
+            self.loaded = True
+
+        def to(self, device):
+            return self
+
+        def eval(self):
+            return self
+
+    # Patch load_loc_model to always raise
+    monkeypatch.setattr(
+        custom_models,
+        "load_loc_model",
+        lambda *a, **k: (_ for _ in ()).throw(Exception("Failed for Loc model")),
+    )
+    # Patch flat_bug.predictor.Predictor to always raise
+    import sys
+    import types
+
+    dummy_predictor_mod = types.ModuleType("flat_bug.predictor")
+    dummy_predictor_mod.Predictor = lambda *a, **k: DummyModel()
+    sys.modules["flat_bug.predictor"] = dummy_predictor_mod
+
+    output = custom_models.load_loc("model.pt", "cpu", verbose=True)
+    assert isinstance(output, DummyModel)
+
+    # check that the print statement was called
+    out_capture = capsys.readouterr().out
+    assert "Loaded localisation model from" in out_capture
+    assert "(flatbug)" in out_capture
+
+
+def test_all_loc_return_none(monkeypatch, capsys):
+    # Patch load_loc_model to always raise
+    monkeypatch.setattr(
+        custom_models,
+        "load_loc_model",
+        lambda *a, **k: (_ for _ in ()).throw(Exception("Failed for Loc model")),
+    )
+    # Patch flat_bug.predictor.Predictor to always raise
+    import sys
+    import types
+
+    dummy_predictor_mod = types.ModuleType("flat_bug.predictor")
+    dummy_predictor_mod.Predictor = lambda *a, **k: (_ for _ in ()).throw(
+        Exception("Failed for flatbug model")
+    )
+    sys.modules["flat_bug.predictor"] = dummy_predictor_mod
+
+    output = custom_models.load_loc("model.pt", "cpu", verbose=True)
+    assert output is None
+    # check that the print statement was called
+    assert (
+        "Failed to load localisation model with load_loc_model or flat_bug"
+        in capsys.readouterr().out
+    )

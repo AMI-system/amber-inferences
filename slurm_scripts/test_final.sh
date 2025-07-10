@@ -3,25 +3,16 @@
 source ~/miniforge3/bin/activate
 conda activate "~/conda_envs/flatbug/"
 
-json_directory="./keys/singapore_final"
-region="sgp"
-output_base_dir="/gws/nopw/j04/ceh_generic/kgoldmann/singapore_inferences_tracking"
+# already has a dummy kesy file
+json_directory="./keys/test/"
+region="cri"
+output_base_dir="/gws/nopw/j04/ceh_generic/kgoldmann/test"
 credentials_file="./credentials.json"
 
 mkdir -p "${output_base_dir}"
 mkdir -p "${json_directory}"
 
-# array of strings dep000045 to dep000054
-dep_files=()
-for i in {45..54}; do
-  dep_files+=("dep$(printf '%06d' $i)")
-done
-
-# # create the key files, only needs to run once
-# for dep in "${dep_files[@]}"; do
-#   echo $dep
-#   amber-keys --bucket $region --deployment_id $dep --output_file "${json_directory}/${dep}.json"
-# done
+rm -rf "${output_base_dir:?}"/*
 
 # for each json file/deployment, create a slurm job
 for json_file in ${json_directory}/dep*.json; do
@@ -60,8 +51,8 @@ output_base_dir="$output_base_dir",\
 deployment_id="$deployment_id",\
 region="$region",\
 credentials_file="$credentials_file",\
-species_model="./models/turing-singapore_v02_resnet50_2024-11-21-19-58_state.pt",\
-species_labels="./models/02_singapore_data_category_map.json" \
+species_model="./models/turing-costarica_v03_resnet50_2024-06-04-16-17_state.pt",\
+species_labels="./models/03_costarica_data_category_map.json" \
   ./slurm_scripts/array_processor.sh
 
   echo "Submitted job for deployment: $deployment_id with ${num_chunks} chunks."
