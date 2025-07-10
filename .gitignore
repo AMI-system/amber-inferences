@@ -197,3 +197,4 @@ logs/
 .DS_Store
 *.gif
 sandbox/*.json
+examples/example_keys/*.json

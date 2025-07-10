@@ -1,26 +1,28 @@
 # Performing AMBER Inference
 
-This directory is designed to download images from Jasmin object store and perform inference to:
-- detect objects
-- classify objects as moth or non-moth
-- identify the order
-- predict the species
+This Repository contains code to download images from the JASMIN object store and perform inference to: 
+- Detect and isolate objects
+- Track objects
+- Classify objects as moth or non-moth
+- Identify the order
+- Predict the species
 
+## JASMIN Set-Up (JASMIN users only)
 
-## JASMIN Set-Up
+JASMIN is a data analysis facility that provides services as a High Performance Computing Cluster and Data Centre. To use this repository on JASMIN, you will require the following services:
 
-To use this pipeline on JASMIN you must have access to the following services:
-- **Login Services**: jasmin-login. This provides access to the JASMIN shared services, i.e. login, transfer, scientific analysis servers, Jupyter notebook and LOTUS.
-- **Object Store**: ami-test-o. This is the data object store tenancy for the Automated Monitoring of Insects Trap.
-
-The [JASMIN documentation](https://help.jasmin.ac.uk/docs/getting-started/get-started-with-jasmin/) provides useful infomration on how to get set-up with these services. Including:
-1. [Generate an SSH key](https://help.jasmin.ac.uk/docs/getting-started/generate-ssh-key-pair/)
-2. [Getting a JASMIN portal account](https://help.jasmin.ac.uk/docs/getting-started/get-jasmin-portal-account/)
-3. [Request “jasmin-login” access](https://help.jasmin.ac.uk/docs/getting-started/get-login-account/) (access to the shared JASMIN servers and the LOTUS batch cluster)
+1. [A JASMIN account](https://help.jasmin.ac.uk/docs/getting-started/get-jasmin-portal-account/)
+2. [A JASMIN login account](https://help.jasmin.ac.uk/docs/getting-started/get-login-account/): This access to the JASMIN shared services, i.e. login, transfer, scientific analysis servers, Jupyter notebook and LOTUS.
+3. [JASMIN ORCHID access (required for segmentation only)](https://accounts.jasmin.ac.uk/services/additional_services/orchid/): This will give you access to the GPU cluster, called ORCHID. The GPU cluster is required if you plan to segment your objects using flatbug.
+4. [Generate an ssh public and private key pair and register the public key in JASMIN](https://help.jasmin.ac.uk/docs/getting-started/generate-ssh-key-pair/): This will allow you to establish an ssh key connection to the JASMIN servers.Please note, it will take a couple of hours for the ssh key-pair to sync with JASMIN’s systems.
+5. [Apply for the ceh_generic UKCEH workspace (UKCEH staff only)](https://accounts.jasmin.ac.uk/services/group_workspaces/ceh_generic/): This will allow you to access the CEH shared workspace, for a greater storage size allocation to and submit jobs under the `ceh_generic` account (needed for submissions to LOTUS only).
+6. A JASMIN object store ssh key. You will need this to obtain files located on the data centre. The object store used to manage the automated monitoring data is called "ami-test-o". You will need a valid key generated for yourself, or for another member. It is recommended that you do the former if you need frequent access the object store, to prevent disruption if keys are invalidated. If you want to have a key generated for yourself, contact the object store manager, [Tom August](tomaug@ceh.ac.uk).
 
 ## Models
 
-You will need to add the models files to the ./models subdirectory. Following this you can pass in:
+The model files are managed in the ./models subdirectory. Following this you can pass in:
+- species_model: The path to the regional species model
+- species_labels: The path to the species labels
 - binary_model_path: The path to the binary model weights
 - order_model_path: The path to the binary model weights
 - order_threshold_path: The path to the binary model weights
@@ -37,10 +39,6 @@ There are several object detection models which can be used in this analysis. Th
 | flatbug_*.pt  **(Default)**          | 0.0          |
 | v1_localizmodel_2021-08-17-12-06.pt  | 0.99         |
 | fasterrcnn_resnet50_fpn_tz53qv9v.pt  | 0.8          |
-
-
-
-
 
 ## Configs
 
@@ -59,9 +57,6 @@ To use the inference scripts you will need to set up a `credentials.json` file c
 
 Contact [Katriona Goldmann](kgoldmann@turing.ac.uk) for the AWS Access and UKCEH API configs.
 
-
-
-
 ## Setting up the Environment
 
 Create a conda environment:
@@ -72,7 +67,6 @@ conda activate "~/amber/"
 ```
 If you are not using flatbut you can get away with python=3.9.
 
-
 ```sh
 conda install --yes --file requirements.txt
 pip install -e .
@@ -80,7 +74,16 @@ pip install -e .
 
 ## If using GPU
 
-You will need to use GPU to utilise Flatbug. To do this you will need to install the correct torch version for your CUDA version. Check the drivers:
+You will need to use GPU to utilise Flatbug. To do this you will need to install the correct torch version for your CUDA version.
+
+First you need to access the interactive GPU server:
+
+```bash
+ssh -A <jasmin_username>@login-01.jasmin.ac.uk
+ssh <jasmin_username>@gpuhost001.jc.rl.ac.uk
+```
+
+Check the drivers:
 
 ```bash
 nvidia-smi
@@ -90,6 +93,12 @@ Then [find the correct torch command](https://pytorch.org/get-started/locally/) 
 
 ```bash
 conda install pytorch torchvision torchaudio pytorch-cuda=12.4 -c pytorch -c nvidia
+```
+
+Now install timm, using pip to avoid overwriting torch.
+
+```bash
+pip install timm
 ```
 
 Create an environment:

@@ -16,7 +16,15 @@ from amber_inferences.utils.api_utils import get_deployments
 
 def count_files(s3_client, bucket_name, prefix):
     """
-    Count number of files for a given prefix.
+    Count the number of image and audio files for a given prefix in an S3 bucket.
+
+    Args:
+        s3_client: Boto3 S3 client.
+        bucket_name (str): Name of the S3 bucket.
+        prefix (str): Prefix to filter objects.
+
+    Returns:
+        dict: Dictionary with keys 'keys', 'image_count', and 'audio_count'.
     """
     image_count = 0
     audio_count = 0
@@ -58,7 +66,17 @@ def deployment_data(
     include_file_count=True,
 ):
     """
-    Provide the deployments available through the object store.
+    Provide the deployments available through the object store, with optional filtering and file counts.
+
+    Args:
+        credentials (dict): AWS and UKCEH credentials.
+        include_inactive (bool): Whether to include inactive deployments.
+        subset_countries (list, optional): List of country names or codes to filter.
+        subset_deployments (list, optional): List of deployment IDs to filter.
+        include_file_count (bool): Whether to include file counts for each deployment.
+
+    Returns:
+        dict: Dictionary of deployment data keyed by deployment ID.
     """
 
     # Get all deployments
@@ -159,7 +177,16 @@ def print_deployments(
     credentials, include_inactive=False, subset_countries=None, print_file_count=True
 ):
     """
-    Provide the deployments available through the object store.
+    Print the deployments available through the object store, grouped by country.
+
+    Args:
+        credentials (dict): AWS and UKCEH credentials.
+        include_inactive (bool): Whether to include inactive deployments.
+        subset_countries (list, optional): List of country names or codes to filter.
+        print_file_count (bool): Whether to print the number of images per deployment.
+
+    Returns:
+        None
     """
 
     # Get all deployments
@@ -235,6 +262,13 @@ def print_deployments(
 
 
 def main():
+    """
+    Command-line entry point for printing deployments available on the Jasmin object store.
+    Parses arguments and prints deployment information.
+
+    Returns:
+        None
+    """
     parser = argparse.ArgumentParser(
         description="Script for printing the deployments available on the Jasmin object store."
     )

@@ -7,11 +7,13 @@ from datetime import datetime
 
 def list_s3_keys(s3_client, bucket_name, deployment_id="", subdir=None):
     """
-    List all keys in an S3 bucket under a specific prefix.
+    List all keys in an S3 bucket under a specific prefix and subdirectory, filtering out corrupt/hidden keys.
 
-    Parameters:
+    Args:
+        s3_client: Boto3 S3 client.
         bucket_name (str): The name of the S3 bucket.
-        prefix (str): The prefix to filter keys (default: "").
+        deployment_id (str): Deployment ID to use as prefix (default: "").
+        subdir (str, optional): Subdirectory to further filter keys.
 
     Returns:
         list: A list of S3 object keys.
@@ -50,6 +52,17 @@ def list_s3_keys(s3_client, bucket_name, deployment_id="", subdir=None):
 
 
 def process_date(image_path, deployment_id, error_log_dir):
+    """
+    Extract a datetime object from an image path string, logging errors if parsing fails.
+
+    Args:
+        image_path (str): Path to the image file.
+        deployment_id (str): Deployment ID for logging.
+        error_log_dir (str): Directory to save error logs.
+
+    Returns:
+        datetime or str: Parsed datetime object, or "" if parsing fails.
+    """
     image_dt = os.path.basename(image_path).split("-")
     image_dt = [x.split(".")[0] for x in image_dt]
     image_dt = [x for x in image_dt if x.startswith(("202", "201"))]
@@ -87,14 +100,18 @@ def save_keys(
     verbose=False,
 ):
     """
-    Save S3 keys to a JSON file.
+    Save S3 keys for a deployment to a JSON file, grouped by session date.
 
-    Parameters:
+    Args:
         s3_client: Boto3 S3 client.
         bucket (str): Name of the S3 bucket.
         deployment_id (str): Deployment ID for filtering keys.
         output_file (str): Path to the output JSON file.
         subdir (str): Subdirectory to filter keys (default: "snapshot_images").
+        verbose (bool): Whether to print status messages.
+
+    Returns:
+        None
     """
     os.makedirs(os.path.dirname(output_file) or os.getcwd(), exist_ok=True)
 
@@ -133,7 +150,15 @@ def save_keys(
 
 def load_workload(input_file, file_extensions, subset_dates=None):
     """
-    Load workload from a file. Assumes each line contains an S3 key.
+    Load a list of S3 keys from a file, optionally filtering by file extension and date.
+
+    Args:
+        input_file (str): Path to the file containing S3 keys (one per line).
+        file_extensions (list): List of file extensions to include.
+        subset_dates (list, optional): List of dates (YYYY-MM-DD) to filter keys.
+
+    Returns:
+        list: Filtered list of S3 keys.
     """
     with open(input_file, "r", encoding="UTF-8") as f:
         all_keys = [line.strip() for line in f.readlines()]
@@ -166,6 +191,13 @@ def load_workload(input_file, file_extensions, subset_dates=None):
 def split_workload(keys, chunk_size):
     """
     Split a list of keys into chunks of a specified size.
+
+    Args:
+        keys (list): List of S3 keys.
+        chunk_size (int): Number of keys per chunk.
+
+    Returns:
+        dict: Dictionary of chunks, each containing a list of keys.
     """
     num_chunks = ceil(len(keys) / chunk_size)
     chunks = {
@@ -177,7 +209,14 @@ def split_workload(keys, chunk_size):
 
 def save_chunks(chunks, output_file):
     """
-    Save chunks to a JSON file.
+    Save chunks of keys to a JSON file.
+
+    Args:
+        chunks (dict): Dictionary of chunks to save.
+        output_file (str): Path to the output JSON file.
+
+    Returns:
+        None
     """
     # create dir if not existant
     os.makedirs(os.path.dirname(output_file) or os.getcwd(), exist_ok=True)

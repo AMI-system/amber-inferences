@@ -78,6 +78,22 @@ def test_get_image_metadata():
     assert len(session) > 0
 
 
+def test_get_image_metadata_valid():
+    # Filename with datetime string
+    path = Path("foo-20240101123456-bar.jpg")
+    dt, session = inference_scripts.get_image_metadata(path)
+    assert dt == "2024-01-01 12:34:56"
+    assert session == "2024-01-01"
+
+
+def test_get_image_metadata_no_datetime():
+    # Filename without datetime string
+    path = Path("foo-bar.jpg")
+    dt, session = inference_scripts.get_image_metadata(path)
+    assert dt == ""
+    assert session == ""
+
+
 @pytest.mark.parametrize(
     "filename,expected_dt,expected_session",
     [
@@ -255,14 +271,17 @@ def test_save_embedding_verbose(tmp_path, capsys):
 
 # region Tests for save_result_row function
 def test_save_result_row(tmp_path):
-    # Test that save_result_row writes a row to a new CSV file
-    csv_file = tmp_path / "out.csv"
     data = [1, 2, 3]
     columns = ["a", "b", "c"]
+    csv_file = tmp_path / "test.csv"
     inference_scripts.save_result_row(data, columns, csv_file)
     df = pd.read_csv(csv_file)
     assert list(df.columns) == columns
-    assert len(df) == 1
+    assert df.iloc[0].tolist() == data
+    # Test append
+    inference_scripts.save_result_row(data, columns, csv_file)
+    df2 = pd.read_csv(csv_file)
+    assert len(df2) == 2
 
 
 @pytest.mark.parametrize(
@@ -379,6 +398,15 @@ def test_convert_ndarrays():
     assert inference_scripts.convert_ndarrays("foo") == "foo"
 
 
+def test_convert_ndarrays_nested():
+    # Test that convert_ndarrays works recursively for nested structures
+    arr = np.array([1, 2, 3])
+    obj = {"a": [arr, {"b": arr}]}
+    out = inference_scripts.convert_ndarrays(obj)
+    assert isinstance(out["a"], list)
+    assert isinstance(out["a"][1]["b"], list)
+
+
 @pytest.mark.parametrize(
     "obj,expected_type",
     [
@@ -394,13 +422,14 @@ def test_convert_ndarrays_param(obj, expected_type):
     assert isinstance(out, expected_type)
 
 
-def test_convert_ndarrays_nested():
-    # Test that convert_ndarrays works recursively for nested structures
-    arr = np.array([1, 2, 3])
-    obj = {"a": [arr, {"b": arr}]}
-    out = inference_scripts.convert_ndarrays(obj)
-    assert isinstance(out["a"], list)
-    assert isinstance(out["a"][1]["b"], list)
+def test_convert_ndarrays_recursive():
+    # Test that convert_ndarrays converts numpy arrays to lists in various structures
+    arr = np.array([[1, 2], [3, 4]])
+    d = {"a": arr, "b": [arr, 5], "c": {"d": arr}}
+    result = inference_scripts.convert_ndarrays(d)
+    assert result["a"] == [[1, 2], [3, 4]]
+    assert result["b"][0] == [[1, 2], [3, 4]]
+    assert result["c"]["d"] == [[1, 2], [3, 4]]
 
 
 # endregion
@@ -812,6 +841,42 @@ def test_save_and_append_result_row_integration(tmp_path):
     assert df.iloc[1]["b"] == 5
 
 
+def test_perform_inf_no_crops(monkeypatch, tmp_path):
+    # Mock all model calls and dependencies
+    monkeypatch.setattr(
+        inference_scripts,
+        "get_boxes",
+        lambda *a, **k: ({"scores": [0.01], "labels": [0]}, [[0, 0, 10, 10]]),
+    )
+    img_path = tmp_path / "img-20240101123456-test.jpg"
+    img = Image.new("RGB", (10, 10))
+    img.save(img_path)
+    csv_file = tmp_path / "out.csv"
+    dep_data = get_dep_data()
+    inference_scripts.perform_inf(
+        image_path=img_path,
+        dep_data=dep_data,
+        localisation_model=None,
+        binary_model=None,
+        order_model=None,
+        order_labels={0: "Lepidoptera"},
+        regional_model=None,
+        regional_category_map={"species1": 0},
+        proc_device="cpu",
+        order_data_thresholds={},
+        csv_file=csv_file,
+        save_crops=False,
+        box_threshold=0.5,
+        top_n=1,
+        verbose=True,
+        previous_image=None,
+    )
+    df = pd.read_csv(csv_file)
+    assert "image_path" in df.columns
+    assert df["crop_status"].values == "No detections for this image."
+    assert len(df) == 1
+
+
 def test_perform_inf_integration(monkeypatch, tmp_path):
     # Mock all model calls and dependencies
     monkeypatch.setattr(
@@ -1001,6 +1066,98 @@ def test__get_best_matches_no_previous():
         result.iloc[0]["best_match_crop"]
         == "No species crops from this/previous image. Tracking not possible."
     )
+
+
+# endregion
+
+
+# region Test download_and_analyse function
+def test_download_and_analyse_basic(tmp_path, monkeypatch, capsys):
+    # Setup dummy keys and dep_data
+    keys = ["img1.jpg"]
+    output_dir = tmp_path / "out"
+    output_dir.mkdir()
+    dep_data = {
+        "country_code": "bucket",
+        "location_name": "loc",
+        "deployment_id": "dep",
+        "lat": 0,
+        "lon": 0,
+    }
+
+    # Dummy client with download_file
+    class DummyClient:
+        def download_file(self, bucket, key, dest):
+            Path(dest).parent.mkdir(parents=True, exist_ok=True)
+            img = Image.fromarray(np.ones((10, 10, 3), dtype=np.uint8) * 255)
+            img.save(dest)
+
+    client = DummyClient()
+    # Patch perform_inf to just record call (do not delete file here)
+    called = {}
+
+    def fake_perform_inf(*args, **kwargs):
+        called["called"] = True
+
+    monkeypatch.setattr(inference_scripts, "perform_inf", fake_perform_inf)
+
+    inference_scripts.download_and_analyse(
+        keys,
+        output_dir,
+        dep_data,
+        client,
+        remove_image=True,
+        perform_inference=True,
+        save_crops=False,
+        localisation_model=None,
+        csv_file=output_dir / "results.csv",
+        verbose=True,
+    )
+    assert called["called"]
+    # The file should be removed by download_and_analyse
+    assert not (output_dir / "img1.jpg").exists()
+    assert "Analysing images:" in capsys.readouterr().out
+
+
+def test_download_and_analyse_no_perform(monkeypatch, tmp_path):
+    # Should not call perform_inf if perform_inference=False
+    keys = ["img2.jpg"]
+    output_dir = tmp_path / "out2"
+    output_dir.mkdir()
+    dep_data = {
+        "country_code": "bucket",
+        "location_name": "loc",
+        "deployment_id": "dep",
+        "lat": 0,
+        "lon": 0,
+    }
+
+    class DummyClient:
+        def download_file(self, bucket, key, dest):
+            Path(dest).parent.mkdir(parents=True, exist_ok=True)
+            img = Image.fromarray(np.ones((10, 10, 3), dtype=np.uint8) * 255)
+            img.save(dest)
+
+    client = DummyClient()
+    monkeypatch.setattr(
+        inference_scripts,
+        "perform_inf",
+        lambda *a, **k: (_ for _ in ()).throw(Exception("Should not be called")),
+    )
+    # Should not raise
+    inference_scripts.download_and_analyse(
+        keys,
+        output_dir,
+        dep_data,
+        client,
+        remove_image=True,
+        perform_inference=False,
+        save_crops=False,
+        localisation_model=None,
+        csv_file=output_dir / "results.csv",
+    )
+    # File should be removed
+    assert not (output_dir / "img2.jpg").exists()
 
 
 # endregion
