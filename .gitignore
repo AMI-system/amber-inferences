@@ -194,3 +194,4 @@ logs/
 *.gif
 sandbox/*.json
 examples/example_keys/*.json
+sandbox/plots/*
