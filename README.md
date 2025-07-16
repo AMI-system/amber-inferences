@@ -7,16 +7,24 @@ This Repository contains code to download images from the JASMIN object store an
 - Identify the order
 - Predict the species
 
-## JASMIN Set-Up (JASMIN users only)
+## JASMIN Set-Up
 
 JASMIN is a data analysis facility that provides services as a High Performance Computing Cluster and Data Centre. To use this repository on JASMIN, you will require the following services:
 
 1. [A JASMIN account](https://help.jasmin.ac.uk/docs/getting-started/get-jasmin-portal-account/)
 2. [A JASMIN login account](https://help.jasmin.ac.uk/docs/getting-started/get-login-account/): This access to the JASMIN shared services, i.e. login, transfer, scientific analysis servers, Jupyter notebook and LOTUS.
-3. [JASMIN ORCHID access (required for segmentation only)](https://accounts.jasmin.ac.uk/services/additional_services/orchid/): This will give you access to the GPU cluster, called ORCHID. The GPU cluster is required if you plan to segment your objects using flatbug.
+3. [JASMIN ORCHID access (required for segmentation only)](https://accounts.jasmin.ac.uk/services/additional_services/orchid/): This will give you access to the GPU cluster, called ORCHID. The GPU cluster is required to effectively segment your objects using flatbug.
 4. [Generate an ssh public and private key pair and register the public key in JASMIN](https://help.jasmin.ac.uk/docs/getting-started/generate-ssh-key-pair/): This will allow you to establish an ssh key connection to the JASMIN servers.Please note, it will take a couple of hours for the ssh key-pair to sync with JASMIN’s systems.
 5. [Apply for the ceh_generic UKCEH workspace (UKCEH staff only)](https://accounts.jasmin.ac.uk/services/group_workspaces/ceh_generic/): This will allow you to access the CEH shared workspace, for a greater storage size allocation to and submit jobs under the `ceh_generic` account (needed for submissions to LOTUS only).
 6. A JASMIN object store ssh key. You will need this to obtain files located on the data centre. The object store used to manage the automated monitoring data is called "ami-test-o". You will need a valid key generated for yourself, or for another member. It is recommended that you do the former if you need frequent access the object store, to prevent disruption if keys are invalidated. If you want to have a key generated for yourself, contact the object store manager, [Tom August](tomaug@ceh.ac.uk).
+
+In JASMIN, you will need to install conda. Conda is required to manage a python installation and it's python module versions. The process for the installation of conda on JASMIN is detailed [here](https://help.jasmin.ac.uk/docs/software-on-jasmin/creating-and-using-miniforge-environments/):
+
+After successfully installing conda, you must activate it.
+
+```bash
+source ~/miniforge3/bin/activate
+```
 
 ## Models
 
@@ -32,7 +40,7 @@ AMBER team members can find these files on [OneDrive](https://thealanturininstit
 
 ### Recommended Box thresholds
 
-There are several object detection models which can be used in this analysis. These have varying recommended confidence thresholds to define object bounding boxes. The box threshold can be altered using the `--box_threshold` argument in `04_process_chunks.py`. The table below outlines the recommended thresholds for some models:
+There are several object detection models which can be used in this analysis. These have varying recommended confidence thresholds to define object bounding boxes. The box threshold can be altered using the `--box_threshold` argument in `slurm_scripts/array_processor.sh`. The table below outlines the recommended thresholds for some models:
 
 | Model file name                      | Recommended box threshold |
 |--------------------------------------|---------------------------|
@@ -59,71 +67,76 @@ Contact [Katriona Goldmann](kgoldmann@turing.ac.uk) for the AWS Access and UKCEH
 
 ## Setting up the Environment
 
-Create a conda environment:
-
-```bash
-conda create -p "~/amber/" python=3.11
-conda activate "~/amber/"
-```
-If you are not using flatbut you can get away with python=3.9.
-
-```sh
-conda install --yes --file requirements.txt
-pip install -e .
-```
-
-## If using GPU
-
-You will need to use GPU to utilise Flatbug. To do this you will need to install the correct torch version for your CUDA version.
-
-First you need to access the interactive GPU server:
+The conda environment will be built inside the GPU interactive server. Whilst the conda environment can be accessed from the scientific servers (from which you will submit your inference jobs), building it inside the GPU server will ensure that torch is configured for the correct version of cuda.
 
 ```bash
 ssh -A <jasmin_username>@login-01.jasmin.ac.uk
 ssh <jasmin_username>@gpuhost001.jc.rl.ac.uk
 ```
 
-Check the drivers:
+First create a conda environment.
+
+```bash
+conda create -p ~/amber python=3.11
+conda activate ~/amber
+```
+
+Next, you need to install the correct version of torch corresponding to your cuda version. To obtain the cuda version, check the drivers. You will see the cuda version in the top righthand corner of the output table.
 
 ```bash
 nvidia-smi
 ```
 
-Then [find the correct torch command](https://pytorch.org/get-started/locally/) for that CUDA version. For example, for Cuda 12.4:
+Then [find the correct torch command](https://pytorch.org/get-started/locally/) for that CUDA version. For JASMIN users, the command you should run is:
 
 ```bash
 conda install pytorch torchvision torchaudio pytorch-cuda=12.4 -c pytorch -c nvidia
 ```
 
-Now install timm, using pip to avoid overwriting torch.
+Next, you need to install timm. The installation of timm needs to be completed using pip to avoid overwriting the GPU configuration of torch.
 
 ```bash
 pip install timm
 ```
 
-Create an environment:
+Now, if you have not already done so, clone this repository, and checkout to the `dev` brach
 
 ```bash
-source ~/miniforge3/bin/activate
-conda activate "~/amber/"
-
+git clone https://github.com/AMI-system/amber-inferences.git
 cd amber-inferences
-pip install -e .
+git checkout dev
+cd ..
 ```
 
-## If installing Flatbug
-
+Install the dependancies listed inside the requirements.txt file
 
 ```bash
-cd ../
+conda install --yes --file ~/amber-inferences/requirements.txt
+```
+
+Now clone and install flatbug in editable mode
+
+```bash
 git clone git@github.com:darsa-group/flat-bug.git
 cd flat-bug
 git checkout develop
 pip install -e .
-cd ../amber_inferences
+cd ..
 ```
 
+Likewise, install the amber-inferences repository in editable mode.
 
+```bash
+pip install -e ~/amber-inferences
+```
+
+Now confirm that cuda has been successfully configured
+
+```bash
+python -c "import torch; print(torch.cuda.is_available())"
+```
+
+If TRUE, you have successfully configured cuda!
 
 ## Running
 
@@ -131,7 +144,6 @@ Once everything is installed you can run the inference pipeline.
 There is a tutorial set up in `./examples/tutorial.ipynb` which can be used to
 run and explore the pipeline. This is recommended for first time users.
 The commands below outline the process for running the pipeline from command line.
-
 
 
 #### Printing the Deployments Available
