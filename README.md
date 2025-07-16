@@ -67,7 +67,7 @@ Contact [Katriona Goldmann](kgoldmann@turing.ac.uk) for the AWS Access and UKCEH
 
 ## Setting up the Environment
 
-The conda environment will be built inside the GPU interactive server. Whilst the conda environment can be accessed from the scientific servers (from which you will submit your inference jobs), building it inside the GPU server will ensure that torch is configured for the correct version of cuda.
+The conda environment will be built inside the GPU interactive node. Whilst the conda environment can be accessed from the scientific servers (from which you will submit your inference jobs), building it inside the GPU node will ensure that torch is configured for the correct version of cuda.
 
 ```bash
 ssh -A <jasmin_username>@login-01.jasmin.ac.uk
@@ -93,13 +93,13 @@ Then [find the correct torch command](https://pytorch.org/get-started/locally/) 
 conda install pytorch torchvision torchaudio pytorch-cuda=12.4 -c pytorch -c nvidia
 ```
 
-Next, you need to install timm. The installation of timm needs to be completed using pip to avoid overwriting the GPU configuration of torch.
+Next, you need to install timm. The installation of timm needs to be completed using `pip` to avoid overwriting the GPU configuration of torch.
 
 ```bash
 pip install timm
 ```
 
-Now, if you have not already done so, clone this repository, and checkout to the `dev` brach
+If you have not already done so, clone this repository, and checkout the `dev` branch.
 
 ```bash
 git clone https://github.com/AMI-system/amber-inferences.git
@@ -108,13 +108,13 @@ git checkout dev
 cd ..
 ```
 
-Install the dependancies listed inside the requirements.txt file
+Next, install the dependancies listed inside the requirements.txt file.
 
 ```bash
 conda install --yes --file ~/amber-inferences/requirements.txt
 ```
 
-Now clone and install flatbug in editable mode
+Now clone and install flatbug in editable mode.
 
 ```bash
 git clone git@github.com:darsa-group/flat-bug.git
@@ -130,13 +130,18 @@ Likewise, install the amber-inferences repository in editable mode.
 pip install -e ~/amber-inferences
 ```
 
-Now confirm that cuda has been successfully configured
+Now confirm that torch has been successfully configured.
 
 ```bash
 python -c "import torch; print(torch.cuda.is_available())"
 ```
 
-If TRUE, you have successfully configured cuda!
+If TRUE, you have successfully configured torch!
+
+### A note on job submission
+
+Please note that the orchid role grants access to the LOTUS partition used by ORCHID. As a result, you will submit inference jobs from the scientific servers, specifying the orchid account, partitition, and quality of service. [Please see this article for more details](https://help.jasmin.ac.uk/docs/batch-computing/how-to-submit-a-job/).
+
 
 ## Running
 
