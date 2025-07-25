@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --time=10:00:00
+#SBATCH --time=20:00:00
 
 echo "Job name: ${SLURM_JOB_NAME}"
 echo "Job ID: ${SLURM_ARRAY_JOB_ID}"
@@ -11,6 +11,9 @@ this_session="${session_names_array[$SLURM_ARRAY_TASK_ID - 1]}"
 echo "Session date: ${this_session}"
 
 echo "Output csv: ${output_base_dir}/${deployment_id}/${deployment_id}_${this_session}.csv"
+
+output="./logs/$region/${deployment_id}_batch_${this_session}.out"
+exec > "$output" 2>&1
 
 
 # Set up GPU monitoring log
