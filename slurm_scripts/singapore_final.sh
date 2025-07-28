@@ -3,7 +3,7 @@
 source ~/miniforge3/bin/activate
 conda activate "~/conda_envs/flatbug/"
 
-json_directory="./keys/singapore_final"
+json_directory="./keys/singapore_final_missing_keys"
 region="sgp"
 output_base_dir="/gws/nopw/j04/ceh_generic/kgoldmann/singapore_inferences_tracking"
 credentials_file="./credentials.json"
