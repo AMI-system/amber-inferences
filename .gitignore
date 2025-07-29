@@ -178,6 +178,10 @@ cython_debug/
 .mypy_cache
 __pycache__
 *.log
+.github
+.gitattributes
+.nfs00e60000050e3ebe0000297d
+.pylintrc
 
 credentials.json
 .ipynb_checkpoints/

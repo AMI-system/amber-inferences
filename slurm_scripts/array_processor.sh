@@ -12,10 +12,16 @@ echo "Job name: ${SLURM_JOB_NAME}"
 echo "Job ID: ${SLURM_ARRAY_JOB_ID}"
 echo "Chunk ID: ${SLURM_ARRAY_TASK_ID}"
 
+source ~/miniforge3/bin/activate
+conda activate "~/amber/"
+export PYTHONPATH="/home/users/dylcar/amber-inferences/src"
+
+IFS=' ' read -r -a session_names_array <<< "$session_names_string"
+this_session="${session_names_array[$SLURM_ARRAY_TASK_ID - 1]}"
+
 echo "Session date: ${this_session}"
 
 echo "Output csv: ${output_base_dir}/${deployment_id}/${deployment_id}_${this_session}.csv"
-
 
 # Set up GPU monitoring log
 GPU_LOG_DIR="${output_base_dir}/${deployment_id}/compute_resources"
