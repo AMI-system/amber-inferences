@@ -1,5 +1,12 @@
 #!/bin/bash
-#SBATCH --time=10:00:00
+#SBATCH --time=20:00:00
+
+IFS=' ' read -r -a session_names_array <<< "$session_names_string"
+this_session="${session_names_array[$SLURM_ARRAY_TASK_ID - 1]}"
+
+# change the log file format to include the session name
+output="./logs/$region/${deployment_id}_batch_${this_session}.out"
+exec > "$output" 2>&1
 
 echo "Job name: ${SLURM_JOB_NAME}"
 echo "Job ID: ${SLURM_ARRAY_JOB_ID}"
@@ -11,6 +18,7 @@ export PYTHONPATH="/home/users/dylcar/amber-inferences/src"
 
 IFS=' ' read -r -a session_names_array <<< "$session_names_string"
 this_session="${session_names_array[$SLURM_ARRAY_TASK_ID - 1]}"
+
 echo "Session date: ${this_session}"
 
 echo "Output csv: ${output_base_dir}/${deployment_id}/${deployment_id}_${this_session}.csv"

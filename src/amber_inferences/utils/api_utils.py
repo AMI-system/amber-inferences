@@ -33,7 +33,7 @@ def get_deployments(username, password):
     try:
         url = "https://connect-apps.ceh.ac.uk/ami-data-upload/get-deployments/"
         response = requests.post(
-            url, data={"username": username, "password": password}, timeout=30
+            url, data={"username": username, "password": password}, timeout=600
         )
         response.raise_for_status()
         return response.json()
