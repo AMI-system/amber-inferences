@@ -915,7 +915,11 @@ def download_and_analyse(
 
     previous_image = None
     for key in keys:
-        download_image_from_key(client, key, dep_data["country_code"], output_dir)
+        try:
+            download_image_from_key(client, key, dep_data["country_code"], output_dir)
+        except Exception as e:
+            print(f"Error downloading {key}: {e}")
+            continue
         local_path = output_dir / Path(key).name
 
         # Perform image analysis if enabled

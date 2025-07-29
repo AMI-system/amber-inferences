@@ -70,7 +70,7 @@ def main(
 
     # if the csv files exists, and skip_processed is set to true, then remove keys which are already in the csv
     if csv_file.exists() and skip_processed:
-        already_processed = pd.read_csv(csv_file)
+        already_processed = pd.read_csv(csv_file, low_memory=False)
         csv_keys = already_processed["image_path"].tolist()
         csv_keys = [os.path.basename(key) for key in csv_keys]
 
