@@ -14,7 +14,7 @@ echo "Chunk ID: ${SLURM_ARRAY_TASK_ID}"
 
 source ~/miniforge3/bin/activate
 conda activate "~/amber/"
-export PYTHONPATH="/home/users/dylcar/amber-inferences/src"
+export PYTHONPATH="$HOME/amber-inferences/src"
 
 IFS=' ' read -r -a session_names_array <<< "$session_names_string"
 this_session="${session_names_array[$SLURM_ARRAY_TASK_ID - 1]}"
