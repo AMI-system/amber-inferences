@@ -199,17 +199,27 @@ def calculate_cost(crop1, crop2, w_cnn=1, w_iou=1, w_box=1, w_dis=1):
 
     diag = math.sqrt(image_width**2 + image_height**2)
 
-    cnn_cost = 1 - cosine_similarity(features1, features2)
-    iou_cost = 1 - iou(bb1, bb2)
-    box_ratio_cost = 1 - box_ratio(bb1, bb2)
-    dist_ratio_cost = distance_ratio(bb1, bb2, diag)
+    try:
+        cnn_cost = 1 - cosine_similarity(features1, features2)
 
-    total_cost = (
-        w_cnn * cnn_cost
-        + w_iou * iou_cost
-        + w_box * box_ratio_cost
-        + w_dis * dist_ratio_cost
-    )
+        iou_cost = 1 - iou(bb1, bb2)
+        box_ratio_cost = 1 - box_ratio(bb1, bb2)
+        dist_ratio_cost = distance_ratio(bb1, bb2, diag)
+
+        total_cost = (
+            w_cnn * cnn_cost
+            + w_iou * iou_cost
+            + w_box * box_ratio_cost
+            + w_dis * dist_ratio_cost
+        )
+
+    except Exception as e:
+        print(f"Error calculating CNN cost: {e}")
+        cnn_cost = None
+        iou_cost = None
+        box_ratio_cost = None
+        dist_ratio_cost = None
+        total_cost = None
 
     results = {
         "crop1_path": [crop1["image_path"]],
@@ -222,6 +232,7 @@ def calculate_cost(crop1, crop2, w_cnn=1, w_iou=1, w_box=1, w_dis=1):
         "dist_ratio_cost": [dist_ratio_cost],
         "total_cost": [total_cost],
     }
+
     results_df = pd.DataFrame(results).reset_index(drop=True)
 
     return results_df

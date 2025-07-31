@@ -1,11 +1,11 @@
 #!/bin/bash
-#SBATCH --time=20:00:00
+#SBATCH --time=08:00:00
 
 IFS=' ' read -r -a session_names_array <<< "$session_names_string"
 this_session="${session_names_array[$SLURM_ARRAY_TASK_ID - 1]}"
 
 # change the log file format to include the session name
-output="./logs/$region/${deployment_id}_batch_${this_session}.out"
+output="./logs/$region/${deployment_id}_${this_session}.out"
 exec > "$output" 2>&1
 
 echo "Job name: ${SLURM_JOB_NAME}"
