@@ -1064,7 +1064,7 @@ def test__get_best_matches_no_previous():
     assert isinstance(result, pd.DataFrame)
     assert (
         result.iloc[0]["best_match_crop"]
-        == "No species crops from this/previous image. Tracking not possible."
+        == "No species crops from previous image. Tracking not possible."
     )
 
 

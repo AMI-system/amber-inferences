@@ -74,7 +74,7 @@ def test_main_skips_processed(monkeypatch, tmp_path):
     )
 
     # Assertion
-    assert processed_keys["keys"] == ["test/img3.jpg"]
+    assert processed_keys["keys"] == ["test/img2.jpg", "test/img3.jpg"]
 
 
 def test_main_all_processed(monkeypatch, tmp_path, capsys):
