@@ -581,7 +581,7 @@ def _get_best_matches(previous_image, crop_status, embedding_list, verbose=False
     # occurs for non-moth/non-Lepidoptera crops
     if crop_status not in embedding_list:
         if verbose:
-            print("Crop classified as non-moth/non-Lepidoptera. Tracking not possible.")
+            print("Crop classed as non-moth/non-Lepidoptera. Tracking not possible.")
         return pd.DataFrame(
             {
                 "previous_image": [None],
