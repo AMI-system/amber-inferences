@@ -151,6 +151,13 @@ def cosine_similarity(img1_ftrs, img2_ftrs) -> float:
     Raises:
         AssertionError: If similarity is out of bounds.
     """
+    # Check for zero norms first
+    norm1 = np.linalg.norm(img1_ftrs)
+    norm2 = np.linalg.norm(img2_ftrs)
+
+    if norm1 == 0 or norm2 == 0:
+        return 0.0
+
     cosine_sim = np.dot(img1_ftrs, img2_ftrs) / (
         np.linalg.norm(img1_ftrs) * np.linalg.norm(img2_ftrs)
     )

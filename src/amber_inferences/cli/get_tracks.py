@@ -16,6 +16,12 @@ def main(csv_file=Path("results.csv"), tracking_threshold=1, verbose=True):
     csv_file = Path(csv_file)
     df = pd.read_csv(csv_file)
 
+    # remove rows that were rerun to avoid tracking discontinuity
+    df = df.drop_duplicates(
+        subset=["image_path", "crop_status", "x_min", "y_min", "x_max", "y_max"],
+        keep="first",
+    )
+
     track_df = track_id_calc(df, cost_threshold=tracking_threshold)
 
     if verbose:
