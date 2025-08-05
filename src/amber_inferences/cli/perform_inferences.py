@@ -77,6 +77,9 @@ def main(
         # order already processed keys by the last modified time
         csv_keys = sorted(csv_keys)
 
+        # remove the last key processed so that gets re-run
+        csv_keys = csv_keys[:-1] if len(csv_keys) > 1 else csv_keys
+
         keys = [key for key in keys if os.path.basename(key) not in csv_keys]
         keys = sorted(keys)
 

@@ -365,3 +365,198 @@ def test_exact_matches():
     assert all(out["crop_id"].values == expected_out["crop_id"].values)
     assert set(out["track_id"].values) == set(expected_out["track_id"].values)
     assert all(out["total_cost"].values == expected_out["total_cost"].values)
+
+
+def test_box_ratio_edge_cases():
+    # Test with same size boxes
+    bb1 = [0, 0, 10, 10]
+    bb2 = [5, 5, 15, 15]
+    ratio = tracking.box_ratio(bb1, bb2)
+    assert ratio == 1.0  # Same area boxes
+
+    # Test with very different sizes
+    bb1 = [0, 0, 1, 1]
+    bb2 = [0, 0, 10, 10]
+    ratio = tracking.box_ratio(bb1, bb2)
+    assert 0 < ratio < 1
+    assert ratio < 0.5  # Much smaller box
+
+
+def test_distance_ratio_edge_cases():
+    # Test with same centers
+    bb1 = [0, 0, 10, 10]
+    bb2 = [0, 0, 20, 20]  # Different size, same center
+    img_diag = 100
+    ratio = tracking.distance_ratio(bb1, bb2, img_diag)
+    true_val = 1 / (10 * math.sqrt(2))
+    assert ratio == true_val
+
+    # Test assertion error with distance > img_diag
+    bb1 = [0, 0, 2, 2]
+    bb2 = [100, 100, 102, 102]
+    img_diag = 10
+    try:
+        tracking.distance_ratio(bb1, bb2, img_diag)
+        assert False, "Should have raised AssertionError"
+    except AssertionError:
+        pass
+
+
+def test_cosine_similarity_edge_cases():
+    # Test with zero vector
+    a = np.array([0, 0, 0])
+    b = np.array([1, 2, 3])
+    sim = tracking.cosine_similarity(a, b)
+    assert sim == 0.0
+
+    # Test with both zero vectors
+    a = np.array([0, 0])
+    b = np.array([0, 0])
+    sim = tracking.cosine_similarity(a, b)
+    assert sim == 0.0
+
+    # Test identical normalized vectors
+    a = np.array([3, 4])
+    b = np.array([6, 8])  # Same direction, different magnitude
+    sim = tracking.cosine_similarity(a, b)
+    assert np.isclose(sim, 1.0)
+
+
+def test_iou_edge_cases():
+    # Test perfect overlap
+    bb1 = [0, 0, 10, 10]
+    bb2 = [0, 0, 10, 10]
+    iou_val = tracking.iou(bb1, bb2)
+    assert np.isclose(iou_val, 1.0)
+
+    # Test no overlap
+    bb1 = [0, 0, 5, 5]
+    bb2 = [10, 10, 15, 15]
+    iou_val = tracking.iou(bb1, bb2)
+    assert iou_val == 0.0
+
+    # Test invalid bounding box assertion
+    try:
+        bb1 = [10, 0, 5, 10]  # xmin > xmax
+        bb2 = [0, 0, 10, 10]
+        tracking.iou(bb1, bb2)
+        assert False, "Should have raised AssertionError"
+    except AssertionError:
+        pass
+
+
+def test_l2_normalize_edge_cases():
+    # Test unit vector
+    t = torch.tensor([1.0, 0.0])
+    normed = tracking.l2_normalize(t)
+    assert torch.allclose(normed, torch.tensor([1.0, 0.0]))
+
+    # Test negative values
+    t = torch.tensor([-3.0, -4.0])
+    normed = tracking.l2_normalize(t)
+    assert np.isclose(normed.norm().item(), 1.0)
+
+
+def test_calculate_cost_weights():
+    # Test with custom weights
+    crop1 = {
+        "embedding": np.array([1, 0]),
+        "image_path": "a",
+        "crop": 0,
+        "box": {"xmin": 0, "ymin": 0, "xmax": 1, "ymax": 1},
+        "image_size": (10, 10),
+    }
+    crop2 = {
+        "embedding": np.array([0, 1]),
+        "image_path": "b",
+        "crop": 1,
+        "box": {"xmin": 2, "ymin": 2, "xmax": 3, "ymax": 3},
+        "image_size": (10, 10),
+    }
+
+    # Test with different weights
+    df = tracking.calculate_cost(crop1, crop2, w_cnn=2, w_iou=0.5, w_box=0.5, w_dis=1)
+    assert "total_cost" in df.columns
+    assert df["total_cost"].iloc[0] is not None
+
+    # Verify the weighted sum is correct
+    expected_total = (
+        2 * df["cnn_cost"].iloc[0]
+        + 0.5 * df["iou_cost"].iloc[0]
+        + 0.5 * df["box_ratio_cost"].iloc[0]
+        + 1 * df["dist_ratio_cost"].iloc[0]
+    )
+    assert np.isclose(df["total_cost"].iloc[0], expected_total)
+
+
+def test_find_best_matches_edge_cases_one():
+    # Test single row
+    df = pd.DataFrame(
+        {
+            "crop1_path": ["a"],
+            "crop1_crop": [0],
+            "crop2_path": ["b"],
+            "crop2_crop": [1],
+            "cnn_cost": [0.1],
+            "iou_cost": [0.2],
+            "box_ratio_cost": [0.1],
+            "dist_ratio_cost": [0.1],
+            "total_cost": [0.5],
+        }
+    )
+    best = tracking.find_best_matches(df)
+    assert len(best) == 1
+    assert best["total_cost"].iloc[0] == 0.5
+
+
+def test_track_id_calc_high_cost_threshold():
+    # Test that high costs break tracks
+    df = pd.DataFrame(
+        {
+            "image_path": ["img2", "img3"],
+            "crop_status": ["crop1", "crop1"],
+            "previous_image": ["img1", "img2"],
+            "best_match_crop": ["crop1", "crop1"],
+            "total_cost": [5.0, 5.0],  # High costs
+        }
+    )
+    out = tracking.track_id_calc(df, cost_threshold=1.0)
+    # Should create separate tracks since costs exceed threshold
+    track_ids = out["track_id"].unique()
+    assert len(track_ids) >= 2
+
+
+def test_extract_embedding_edge_cases(monkeypatch):
+    from PIL import Image
+    import numpy as np
+
+    # Test with very small image
+    crop = Image.fromarray(np.ones((10, 10, 3), dtype=np.uint8) * 128)
+
+    class DummyModel:
+        def __call__(self, x):
+            return torch.zeros((1, 5, 1, 1))  # Return zeros
+
+    model = DummyModel()
+    device = "cpu"
+
+    # Mock transforms and other dependencies
+    monkeypatch.setattr(
+        tracking,
+        "transforms",
+        mock.Mock(Compose=lambda x: lambda y: torch.ones((3, 300, 300))),
+    )
+
+    class DummyNoGrad:
+        def __enter__(self):
+            return None
+
+        def __exit__(self, *a):
+            return None
+
+    monkeypatch.setattr(tracking.torch, "no_grad", DummyNoGrad)
+    monkeypatch.setattr(tracking, "l2_normalize", lambda x: x)
+    monkeypatch.setattr(torch.Tensor, "to", lambda self, device: self)
+
+    features = tracking.extract_embedding(crop, model, device)
+    assert isinstance(features, (np.ndarray, torch.Tensor))

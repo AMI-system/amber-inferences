@@ -8,6 +8,10 @@ def test_main_adds_tracks(tmp_path, monkeypatch, capsys):
         {
             "image_path": ["img1.jpg", "img2.jpg"],
             "crop_status": ["crop_1", "crop_2"],
+            "x_min": [10, 20],
+            "y_min": [15, 25],
+            "x_max": [50, 60],
+            "y_max": [55, 65],
             "other": [1, 2],
         }
     )
@@ -40,6 +44,10 @@ def test_main_merges_correctly(tmp_path, monkeypatch):
         {
             "image_path": ["img1.jpg"],
             "crop_status": ["crop_1"],
+            "x_min": [10],
+            "y_min": [15],
+            "x_max": [50],
+            "y_max": [55],
             "other": [1],
         }
     )
@@ -52,6 +60,10 @@ def test_main_merges_correctly(tmp_path, monkeypatch):
             {
                 "image_path": ["img1.jpg"],
                 "crop_id": ["crop_1"],
+                "x_min": [10],
+                "y_min": [15],
+                "x_max": [50],
+                "y_max": [55],
                 "track_id": [42],
             }
         ),
@@ -69,6 +81,10 @@ def test_main_handles_missing_columns(tmp_path, monkeypatch):
             "image_path": ["img1.jpg"],
             "crop_status": ["crop_1"],
             "other": [1],
+            "x_min": [10],
+            "y_min": [15],
+            "x_max": [50],
+            "y_max": [55],
             "image_path_basename": ["img1.jpg"],
         }
     )
@@ -81,6 +97,10 @@ def test_main_handles_missing_columns(tmp_path, monkeypatch):
             {
                 "image_path": ["img1.jpg"],
                 "crop_id": ["crop_1"],
+                "x_min": [10],
+                "y_min": [15],
+                "x_max": [50],
+                "y_max": [55],
                 "track_id": [7],
             }
         ),
