@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --time=08:00:00
+#SBATCH --time=10:00:00
 
 IFS=' ' read -r -a session_names_array <<< "$session_names_string"
 this_session="${session_names_array[$SLURM_ARRAY_TASK_ID - 1]}"

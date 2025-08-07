@@ -46,11 +46,12 @@ for json_file in ${json_directory}/dep*.json; do
 
   # Call the sbatch script for deployment using batches for arrays
   sbatch --job-name="${region}_${deployment_id}" \
-    --gres gpu:1 \
-    --partition orchid \
-    --qos orchid \
-    --account orchid \
-    --mem 8G \
+    --gres=gpu:1 \
+    --partition=orchid \
+    --qos=orchid \
+    --account=orchid \
+    --exclude=gpuhost011,gpuhost015,gpuhost016 \
+    --mem=8G \
     --array=1-$num_chunks \
     --output="./logs/$region/${deployment_id}_batch_%a.out" \
   --export=ALL,\
