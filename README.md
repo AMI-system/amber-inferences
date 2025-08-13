@@ -258,6 +258,9 @@ This notebook will help you:
 
 Running this quality control step is particularly important when processing large batches of data or when working with new deployments.
 
+# Exporting Results
+
+Use the `./sandbox/package_outputs.sh` script to create zip files for each deployment folder containing all `dep*.csv` files. This will also tell you the command to `scp` the zip files from the remote server to your local machine.
 
 # For Developers
 

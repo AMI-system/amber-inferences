@@ -3,7 +3,7 @@
 # script to create zip file for each deployment folder containing all dep*.csv files
 
 # Directory containing the deployment folders
-DEPLOYMENTS_DIR="/gws/nopw/j04/ceh_generic/kgoldmann/singapore_inferences_tracking/"
+DEPLOYMENTS_DIR="/gws/nopw/j04/ceh_generic/kgoldmann/costarica_inferences_tracking/"
 
 # Move into the deployments directory
 cd "$DEPLOYMENTS_DIR" || exit 1
