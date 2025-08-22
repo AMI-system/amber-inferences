@@ -3,7 +3,7 @@
 source ~/miniforge3/bin/activate
 conda activate "~/conda_envs/flatbug/"
 
-json_directory="./keys/thailand_final_missing_keys"
+json_directory="./keys/thailand_final"
 region="tha"
 output_base_dir="/gws/nopw/j04/ceh_generic/kgoldmann/thailand_inferences_tracking"
 credentials_file="./credentials.json"

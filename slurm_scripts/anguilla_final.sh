@@ -11,17 +11,17 @@ credentials_file="./credentials.json"
 mkdir -p "${output_base_dir}"
 mkdir -p "${json_directory}"
 
-# array of strings dep000099 to dep000100
+# array of strings dep000098 to dep000101
 dep_files=()
-for i in {99..100}; do
+for i in {98..101}; do
   dep_files+=("dep$(printf '%06d' $i)")
 done
 
 # create the key files, only needs to run once
-for dep in "${dep_files[@]}"; do
-  echo $dep
-  amber-keys --bucket $region --deployment_id $dep --output_file "${json_directory}/${dep}.json"
-done
+# for dep in "${dep_files[@]}"; do
+#   echo $dep
+#   amber-keys --bucket $region --deployment_id $dep --output_file "${json_directory}/${dep}.json"
+# done
 
 # for each json file/deployment, create a slurm job
 for json_file in ${json_directory}/dep*.json; do
@@ -44,11 +44,6 @@ for json_file in ${json_directory}/dep*.json; do
 
   echo "Number of sessions: $num_chunks"
 
-  if [ -z "$num_chunks" ] || ! [[ "$num_chunks" =~ ^[0-9]+$ ]]; then
-    echo "Error: Invalid number of chunks for $json_file"
-    continue
-  fi
-
   # Call the sbatch script for deployment using batches for arrays
   sbatch --job-name="${region}_${deployment_id}" \
     --gres gpu:1 \
@@ -68,5 +63,7 @@ credentials_file="$credentials_file",\
 species_model="./models/turing-anguilla_v01_resnet50_2024-11-19-19-17_state.pt",\
 species_labels="./models/02_anguilla_data_category_map.json" \
   ./slurm_scripts/array_processor.sh
+
+echo "Submitted job for deployment: $deployment_id with ${num_chunks} chunks."
 
 done

@@ -5,7 +5,7 @@ conda activate "~/conda_envs/flatbug/"
 
 json_directory="./keys/kenya_final"
 region="ken"
-output_base_dir="/gws/nopw/j04/ceh_generic/kgoldmann/kenya_inferences"
+output_base_dir="/gws/nopw/j04/ceh_generic/kgoldmann/kenya_inferences_tracking"
 credentials_file="./credentials.json"
 
 mkdir -p "${output_base_dir}"
@@ -18,10 +18,10 @@ for i in {94..96}; do
 done
 
 # create the key files, only needs to run once
-for dep in "${dep_files[@]}"; do
-  echo $dep
-  amber-keys --bucket $region --deployment_id $dep --output_file "${json_directory}/${dep}.json"
-done
+# for dep in "${dep_files[@]}"; do
+#   echo $dep
+#   amber-keys --bucket $region --deployment_id $dep --output_file "${json_directory}/${dep}.json"
+# done
 
 # for each json file/deployment, create a slurm job
 for json_file in ${json_directory}/dep*.json; do
