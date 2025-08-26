@@ -1,6 +1,6 @@
 # Performing AMBER Inference
 
-This Repository contains code to download images from the JASMIN object store and perform inference to: 
+This Repository contains code to download images from the JASMIN object store and perform inference to:
 - Detect and isolate objects
 - Track objects
 - Classify objects as moth or non-moth
@@ -241,6 +241,22 @@ The results of the inference will be saved in the output directory specified by 
 - A CSV file containing the results of the inference, including species predictions, order predictions, and bounding box coordinates. The description of the columns in the CSV file are outlined in `output_description.md`.
 - A directory containing the cropped images of the detected objects, if the `--save_crops` argument is specified.
 - A directory containing the original images, if the `--remove_image` argument is not specified.
+
+## Quality Control and Validation
+
+After performing inference, we recommend running the quality control notebook to verify that the inference completed successfully and to identify any potential issues:
+
+```bash
+jupyter notebook sandbox/check_outputs.ipynb
+```
+
+This notebook will help you:
+- Verify that all expected output files were generated
+- Identify any images or deployments that may have encountered processing issues
+- Check for any missing or corrupted outputs
+- Generate summary statistics about the inference results
+
+Running this quality control step is particularly important when processing large batches of data or when working with new deployments.
 
 
 # For Developers
