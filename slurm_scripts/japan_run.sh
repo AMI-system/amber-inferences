@@ -1,26 +1,26 @@
 #!/bin/bash
 
 source ~/miniforge3/bin/activate
-conda activate "~/conda_envs/flatbug/"
+conda activate "~/amber/"
 
-json_directory="./keys/singapore_final_missing_keys"
-region="sgp"
-output_base_dir="/gws/nopw/j04/ceh_generic/kgoldmann/singapore_inferences_tracking"
+json_directory="./keys/japan_job"
+region="jpn"
+output_base_dir="./data/japan_inferences"
 credentials_file="./credentials.json"
 
 mkdir -p "${output_base_dir}"
 mkdir -p "${json_directory}"
 
-# array of strings dep000045 to dep000054
+# array of strings dep000064 only
 dep_files=()
-for i in {45..54}; do
+for i in {105..106}; do
   dep_files+=("dep$(printf '%06d' $i)")
 done
 
-# # create the key files, only needs to run once
+# create the key files, only needs to run once
 # for dep in "${dep_files[@]}"; do
-#   echo $dep
-#   amber-keys --bucket $region --deployment_id $dep --output_file "${json_directory}/${dep}.json"
+# echo $dep
+# amber-keys --bucket $region --deployment_id $dep --output_file "${json_directory}/${dep}.json"
 # done
 
 # for each json file/deployment, create a slurm job
@@ -60,10 +60,10 @@ output_base_dir="$output_base_dir",\
 deployment_id="$deployment_id",\
 region="$region",\
 credentials_file="$credentials_file",\
-species_model="./models/turing-singapore_v02_resnet50_2024-11-21-19-58_state.pt",\
-species_labels="./models/02_singapore_data_category_map.json" \
+species_model="./models/turing-japan_v01_resnet50_2024-11-22-17-22_state.pt",\
+species_labels="./models/01_japan_data_category_map.json",\
   ./slurm_scripts/array_processor.sh
-
+   
   echo "Submitted job for deployment: $deployment_id with ${num_chunks} chunks."
 
 done

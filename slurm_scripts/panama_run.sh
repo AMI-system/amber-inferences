@@ -1,18 +1,27 @@
 #!/bin/bash
 
 source ~/miniforge3/bin/activate
-conda activate "~/conda_envs/flatbug/"
+conda activate "~/amber/"
 
-# already has a dummy kesy file
-json_directory="./keys/test/"
-region="cri"
-output_base_dir="/gws/nopw/j04/ceh_generic/kgoldmann/test"
+json_directory="./keys/panama_job"
+region="pan"
+output_base_dir="./data/panama_inferences"
 credentials_file="./credentials.json"
 
 mkdir -p "${output_base_dir}"
 mkdir -p "${json_directory}"
 
-rm -rf "${output_base_dir:?}"/*
+# array of strings dep000064 only
+dep_files=()
+for i in {17,18,19,20,21,22,83,84,85,86,87,88,89,90,91,92}; do
+  dep_files+=("dep$(printf '%06d' $i)")
+done
+
+# create the key files, only needs to run once
+for dep in "${dep_files[@]}"; do
+  echo $dep
+  amber-keys --bucket $region --deployment_id $dep --output_file "${json_directory}/${dep}.json"
+done
 
 # for each json file/deployment, create a slurm job
 for json_file in ${json_directory}/dep*.json; do
@@ -37,11 +46,12 @@ for json_file in ${json_directory}/dep*.json; do
 
   # Call the sbatch script for deployment using batches for arrays
   sbatch --job-name="${region}_${deployment_id}" \
-    --gres gpu:1 \
-    --partition orchid \
-    --qos orchid \
-    --account orchid \
-    --mem 8G \
+    --gres=gpu:1 \
+    --partition=orchid \
+    --qos=orchid \
+    --account=orchid \
+    --exclude=gpuhost011,gpuhost015,gpuhost016 \
+    --mem=8G \
     --array=1-$num_chunks \
     --output="./logs/$region/${deployment_id}_batch_%a.out" \
   --export=ALL,\
@@ -51,10 +61,10 @@ output_base_dir="$output_base_dir",\
 deployment_id="$deployment_id",\
 region="$region",\
 credentials_file="$credentials_file",\
-species_model="./models/turing-costarica_v03_resnet50_2024-06-04-16-17_state.pt",\
-species_labels="./models/03_costarica_data_category_map.json" \
+species_model="./models/panama_moth-model_v01_resnet50_2023-01-24-09-51.pt",\
+species_labels="./models/panama_moth-category-map_24Jan2023.json" \
   ./slurm_scripts/array_processor.sh
-
+   
   echo "Submitted job for deployment: $deployment_id with ${num_chunks} chunks."
 
 done
