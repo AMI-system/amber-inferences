@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --time=08:00:00
+#SBATCH --time=10:00:00
 
 IFS=' ' read -r -a session_names_array <<< "$session_names_string"
 this_session="${session_names_array[$SLURM_ARRAY_TASK_ID - 1]}"
@@ -13,8 +13,8 @@ echo "Job ID: ${SLURM_ARRAY_JOB_ID}"
 echo "Chunk ID: ${SLURM_ARRAY_TASK_ID}"
 
 source ~/miniforge3/bin/activate
-conda activate "~/conda_envs/flatbug/"
-# export PYTHONPATH="/home/users/dylcar/amber-inferences/src"
+conda activate "~/amber/"
+export PYTHONPATH="$HOME/amber-inferences/src"
 
 IFS=' ' read -r -a session_names_array <<< "$session_names_string"
 this_session="${session_names_array[$SLURM_ARRAY_TASK_ID - 1]}"

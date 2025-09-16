@@ -3,9 +3,9 @@
 source ~/miniforge3/bin/activate
 conda activate "~/amber/"
 
-json_directory="./keys/pymoor_job"
+json_directory="./keys/agzero_2_job"
 region="gbr"
-output_base_dir="./data/pymoor_inferences"
+output_base_dir="./data/agzero_2_inferences"
 credentials_file="./credentials.json"
 
 mkdir -p "${output_base_dir}"
@@ -13,15 +13,15 @@ mkdir -p "${json_directory}"
 
 # array of strings dep000064 only
 dep_files=()
-for i in {55,67}; do
+for i in {64,65,66,67,68,69,70,81,82}; do
   dep_files+=("dep$(printf '%06d' $i)")
 done
 
 # create the key files, only needs to run once
-for dep in "${dep_files[@]}"; do
-  echo $dep
-  amber-keys --bucket $region --deployment_id $dep --output_file "${json_directory}/${dep}.json"
-done
+# for dep in "${dep_files[@]}"; do
+#   echo $dep
+#   amber-keys --bucket $region --deployment_id $dep --output_file "${json_directory}/${dep}.json"
+# done
 
 # for each json file/deployment, create a slurm job
 for json_file in ${json_directory}/dep*.json; do
@@ -46,11 +46,12 @@ for json_file in ${json_directory}/dep*.json; do
 
   # Call the sbatch script for deployment using batches for arrays
   sbatch --job-name="${region}_${deployment_id}" \
-    --gres gpu:1 \
-    --partition orchid \
-    --qos orchid \
-    --account orchid \
-    --mem 8G \
+    --gres=gpu:1 \
+    --partition=orchid \
+    --qos=orchid \
+    --account=orchid \
+    --exclude=gpuhost011,gpuhost015,gpuhost016 \
+    --mem=8G \
     --array=1-$num_chunks \
     --output="./logs/$region/${deployment_id}_batch_%a.out" \
   --export=ALL,\

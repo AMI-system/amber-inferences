@@ -1,30 +1,27 @@
 #!/bin/bash
 
 source ~/miniforge3/bin/activate
-conda activate "~/conda_envs/flatbug/"
+conda activate "~/amber/"
 
-json_directory="./keys/panama_final"
-region="pan"
-output_base_dir="/gws/nopw/j04/ceh_generic/kgoldmann/panama_inferences"
+json_directory="./keys/japan_job"
+region="jpn"
+output_base_dir="./data/japan_inferences"
 credentials_file="./credentials.json"
 
 mkdir -p "${output_base_dir}"
 mkdir -p "${json_directory}"
 
-# array of strings dep000017-22 and dep000083-92
+# array of strings dep000064 only
 dep_files=()
-for i in {17..22}; do
-  dep_files+=("dep$(printf '%06d' $i)")
-done
-for i in {83..92}; do
+for i in {105..106}; do
   dep_files+=("dep$(printf '%06d' $i)")
 done
 
 # create the key files, only needs to run once
-for dep in "${dep_files[@]}"; do
-  echo $dep
-  amber-keys --bucket $region --deployment_id $dep --output_file "${json_directory}/${dep}.json"
-done
+# for dep in "${dep_files[@]}"; do
+# echo $dep
+# amber-keys --bucket $region --deployment_id $dep --output_file "${json_directory}/${dep}.json"
+# done
 
 # for each json file/deployment, create a slurm job
 for json_file in ${json_directory}/dep*.json; do
@@ -47,11 +44,6 @@ for json_file in ${json_directory}/dep*.json; do
 
   echo "Number of sessions: $num_chunks"
 
-  if [ -z "$num_chunks" ] || ! [[ "$num_chunks" =~ ^[0-9]+$ ]]; then
-    echo "Error: Invalid number of chunks for $json_file"
-    continue
-  fi
-
   # Call the sbatch script for deployment using batches for arrays
   sbatch --job-name="${region}_${deployment_id}" \
     --gres gpu:1 \
@@ -68,8 +60,10 @@ output_base_dir="$output_base_dir",\
 deployment_id="$deployment_id",\
 region="$region",\
 credentials_file="$credentials_file",\
-species_model="./models/panama_moth-model_v01_resnet50_2023-01-24-09-51.pt",\
-species_labels="./models/panama_moth-category-map_24Jan2023.json" \
+species_model="./models/turing-japan_v01_resnet50_2024-11-22-17-22_state.pt",\
+species_labels="./models/01_japan_data_category_map.json",\
   ./slurm_scripts/array_processor.sh
+   
+  echo "Submitted job for deployment: $deployment_id with ${num_chunks} chunks."
 
 done
