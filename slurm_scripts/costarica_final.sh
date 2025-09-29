@@ -5,7 +5,7 @@ conda activate "~/conda_envs/flatbug/"
 
 json_directory="./keys/costarica_final"
 region="cri"
-output_base_dir="/gws/nopw/j04/ceh_generic/kgoldmann/costarica_inferences_tracking"
+output_base_dir="/gws/ssde/j25b/ceh_generic/kgoldmann/costarica_inferences_tracking"
 credentials_file="./credentials.json"
 
 mkdir -p "${output_base_dir}"

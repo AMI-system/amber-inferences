@@ -3,7 +3,7 @@
 # script to create zip file for each deployment folder containing all dep*.csv files
 
 # Directory containing the deployment folders
-DEPLOYMENTS_DIR="/gws/nopw/j04/ceh_generic/kgoldmann/singapore_inferences_tracking/"
+DEPLOYMENTS_DIR="/gws/ssde/j25b/ceh_generic/kgoldmann/costarica_inferences_tracking/"
 
 # Move into the deployments directory
 cd "$DEPLOYMENTS_DIR" || exit 1
@@ -29,5 +29,5 @@ for dir in */ ; do
 done
 
 echo "To pull the zip files from remote to your local machine, run:"
-echo "scp -i ~/.ssh/id_rsa_jasmin -r Sci1ViaLogin01:'${DEPLOYMENTS_DIR}*.zip' ~/"
+echo "scp -i ~/.ssh/id_rsa_jasmin -r Sci1ViaLogin01:'${DEPLOYMENTS_DIR}*.zip' ~/Downloads/"
 echo
