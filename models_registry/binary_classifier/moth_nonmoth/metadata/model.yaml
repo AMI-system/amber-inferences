@@ -1,0 +1,32 @@
+model_name: moth_nonmoth_effv2b3
+pipeline_stage: binary_classifier
+
+primary_file: moth-nonmoth-effv2b3_20220506_061527_30.pth
+associated_files:
+  - 05-moth-nonmoth_category_map.json
+
+source:
+  team: Mila / AMI collaboration
+  dataset: AMI-GBIF (moth vs non-moth dataset)
+  original_location: /home/users/alyduf25/amber-inferences/models/
+
+description: >
+  Binary image classifier that distinguishes moths from non-moth arthropods.
+  Used as an intermediate filtering and annotation step in the AMBER pipeline.
+
+inputs:
+  - cropped insect image
+
+outputs:
+  - class_name (moth / nonmoth)
+  - class_confidence
+
+used_in_pipeline: true
+
+evidence:
+  - array_processor.sh (binary_model_path argument)
+  - output CSV fields: class_name, class_confidence
+
+date_added_to_registry: 2026-04-16
+status: active
+confidence_in_provenance: high

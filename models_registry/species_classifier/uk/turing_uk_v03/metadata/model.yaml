@@ -1,0 +1,60 @@
+model_name: turing_uk_v03_resnet50
+pipeline_stage: species_classifier
+
+primary_file: turing-uk_v03_resnet50_2024-05-13-10-03_state.pt
+
+category_maps:
+  available:
+    - 03_uk_data_category_map.json
+  selected: 03_uk_data_category_map.json
+  notes: >
+    Single category map present and used in the production pipeline.
+
+source:
+  original_location: /home/users/alyduf25/amber-inferences/models/
+  probable_team: Alan Turing Institute / AMBER collaboration
+  onedrive_modified_date: 2025-04-29
+  onedrive_modified_by: Katriona Goldmann
+
+description: >
+  Fine-grained species classification model for UK moth species using a ResNet50
+  architecture. This is the primary species classifier used in the AMBER inference
+  pipeline for UK deployments.
+
+inputs:
+  - cropped moth image
+
+outputs:
+  - top_n_species predictions
+  - confidence scores
+
+used_in_pipeline: true
+
+pipeline_context:
+  upstream_models:
+    - flat_bug_M.pt
+    - moth-nonmoth-effv2b3_20220506_061527_30.pth
+    - dhc_best_128.pth
+
+notes: >
+  This is the current production UK species classifier used in the pipeline. It
+  replaces earlier Aarhus models and is paired with the UK-specific category map.
+  A second category map variant was observed in OneDrive but is not present in
+  the working model directory and is not used in the pipeline.
+
+  The AMBER inference pipeline can be run by specifying only the species model.
+  In this case, upstream models (localisation, binary, order) are automatically
+  loaded using default paths defined in the pipeline. These models are not
+  embedded within the species model itself but are implicitly required.
+
+evidence:
+  - local_folder_inference.py defaults
+  - model naming convention (turing-uk_v03)
+  - OneDrive file history
+  - presence in active models directory
+
+date_added_to_registry: 2026-04-16
+status: active
+confidence_in_provenance: high
+
+provenance_date_source: OneDrive file history

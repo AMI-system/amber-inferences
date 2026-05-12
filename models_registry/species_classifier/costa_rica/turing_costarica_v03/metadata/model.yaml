@@ -1,0 +1,37 @@
+model_name: turing_costarica_v03_resnet50
+pipeline_stage: species_classifier
+
+primary_file: turing-costarica_v03_state_resnet50_2024-04-30-14-13.pt
+
+category_maps:
+  available:
+    - 03_costarica_data_category_map.json
+    - 04_costarica_data_category_map.json
+  selected: 03_costarica_data_category_map.json
+  notes: >
+    Both category maps contain the same number of classes (5952).
+    Version 03 selected to align with model version naming.
+
+source:
+  original_location: /gws/ssde/j25b/ceh_generic/kgoldmann/classifier_data/models/
+  probable_team: Alan Turing Institute / AMBER collaboration
+
+description: >
+  Fine-grained species classification model for Costa Rica moth species using a ResNet50 architecture.
+
+inputs:
+  - cropped moth image
+
+outputs:
+  - top_n_species predictions
+  - confidence scores
+
+used_in_pipeline: true
+
+notes: >
+  Latest Costa Rica species classifier version currently held in the registry.
+  Earlier v02 model has been moved to archive.
+
+date_added_to_registry: 2026-04-16
+status: active
+confidence_in_provenance: high

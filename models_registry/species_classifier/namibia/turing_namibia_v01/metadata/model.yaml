@@ -1,0 +1,27 @@
+model_name: turing_namibia_v01_resnet50
+pipeline_stage: species_classifier
+
+primary_file: turing-namibia_v01_resnet50_2025-12-08-14-53_state.pt
+
+category_maps:
+  available:
+    - 01_namibia_data_category_map.json
+  selected: 01_namibia_data_category_map.json
+  notes: >
+    Single Namibia category map available and selected.
+
+source:
+  original_location: /gws/ssde/j25b/ceh_generic/kgoldmann/classifier_data/models/
+  probable_team: Alan Turing Institute / AMBER collaboration
+
+description: >
+  Fine-grained species classification model for Namibia moth species using a ResNet50 architecture.
+
+used_in_pipeline: true
+status: active
+
+notes: >
+  Only Namibia species classifier version currently available.
+
+date_added_to_registry: 2026-04-16
+confidence_in_provenance: high

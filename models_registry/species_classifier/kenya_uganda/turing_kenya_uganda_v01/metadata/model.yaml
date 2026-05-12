@@ -1,0 +1,27 @@
+model_name: turing_kenya_uganda_v01_resnet50
+pipeline_stage: species_classifier
+
+primary_file: turing-kenya-uganda_v01_resnet50_2024-11-19-18-44_state.pt
+
+category_maps:
+  available:
+    - 01_kenya-uganda_data_category_map.json
+  selected: 01_kenya-uganda_data_category_map.json
+  notes: >
+    Single Kenya/Uganda category map available and selected.
+
+source:
+  original_location: /gws/ssde/j25b/ceh_generic/kgoldmann/classifier_data/models/
+  probable_team: Alan Turing Institute / AMBER collaboration
+
+description: >
+  Fine-grained species classification model trained on combined Kenya and Uganda moth datasets using a ResNet50 architecture.
+
+used_in_pipeline: true
+status: active
+
+notes: >
+  Model trained on combined Kenya and Uganda dataset.
+
+date_added_to_registry: 2026-04-16
+confidence_in_provenance: high
